@@ -2,7 +2,6 @@ CHDK Rewired - PowerShot A480
 firmware: 100b
 
 DISKBOOT.BIN md5 3afa42415f89e3b19b825bcc687c2b99
-PS.FIR       md5 c3efbc00f0db0a601e65da658a6dabf6
 
 Bend mode, persistent OSD, record UI, custom sounds, custom boot screen with animation.
 

@@ -62,11 +62,6 @@ If it ever freezes, pull the battery.
 
    Switch on. CHDK loads by itself.
 
-   If you would rather not repartition a card: unzip CHDK-A470-102c-card.zip
-   onto a card the camera formatted, then PLAY mode -> MENU -> scroll to
-   the bottom -> "Firm Update...". Same result, but it has to be done
-   again after every power-off.
-
 5. USING IT
    PRINT/SHARE (the printer icon) toggles "<ALT>" mode.
    In <ALT>: MENU opens CHDK's own menu.

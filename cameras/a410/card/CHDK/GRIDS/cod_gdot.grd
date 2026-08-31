@@ -1,0 +1,10 @@
+@title Green dot sight
+# Wide housing, inner aiming ring, bright centre dot.
+@elps 180, 120, 84, 75, green_dark
+@elps 180, 120, 83, 74, green_dark
+@elps 180, 120, 26, 23, green
+@line 156, 120, 168, 120, green_dark
+@line 204, 120, 192, 120, green_dark
+@line 180,  97, 180, 108, green_dark
+@line 180, 143, 180, 132, green_dark
+@elpsf 180, 120, 3, 3, green_light

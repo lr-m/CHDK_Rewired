@@ -1,0 +1,16 @@
+# Local build overrides (not part of upstream CHDK).
+# Loaded automatically by makefile_base.inc after buildconf.inc.
+
+# Ubuntu 24.04 ships arm-none-eabi-gcc 13; upstream only whitelists 4/5/8/9/10/11.
+# GCC 13 compiles and links these DIGIC III targets cleanly, so bypass the check.
+# If a build ever behaves oddly on the camera, install ARM's 11.3 toolchain and
+# remove this line before ruling out a compiler issue.
+DISABLE_GCC_VERSION_CHECK=1
+
+# svnversion isn't available on a git mirror, so builds are stamped "-0".
+# Set this to the mirror's upstream revision if you want a meaningful stamp.
+#DEF_SVN_REF=0
+
+# Uncomment to fix a default target and just run `make fir`:
+#PLATFORM=a480
+#PLATFORMSUB=100b

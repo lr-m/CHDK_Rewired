@@ -1,0 +1,11 @@
+CHDK Rewired - PowerShot A540
+firmware: 100b
+
+DISKBOOT.BIN md5 a843e1f081273e1ef87cfabd3569d216
+PS.FIR       md5 1827a1a798431a0d11e861b1de758962
+
+Bend mode, persistent OSD, record UI, custom sounds. Custom boot screen is not enabled.
+
+Card volume label RWD_A540 - it must NOT be CHDK. On FAT the volume label
+is an entry in the root directory, so a card labelled CHDK collides with
+the CHDK directory itself: modules stop loading and settings stop saving.

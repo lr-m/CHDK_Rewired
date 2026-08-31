@@ -1,0 +1,26 @@
+********************************
+
+04 - URLs, Links
+
+
+For more information visit the following links:
+
+CHDK Forum :                    http://chdk.setepontos.com/index.php
+
+CHDK Wiki:                      http://chdk.fandom.com/wiki/CHDK
+CHDK Wiki FAQ:                  http://chdk.fandom.com/wiki/FAQ
+
+CHDK Features :                 http://chdk.fandom.com/wiki/CHDK_User_Manual#Introduction
+CHDK in Brief :                 http://chdk.fandom.com/wiki/CHDK_in_Brief
+CHDK User Quick Start Guide :   http://chdk.fandom.com/wiki/CHDK_User_Quick_Start_Guide.pdf
+CHDK User Manual :              http://chdk.fandom.com/wiki/CHDK_User_Manual
+CHDK for Dummies :              http://chdk.fandom.com/wiki/CHDK_for_Dummies
+CHDK Installation Guide :       http://chdk.fandom.com/wiki/File:CHDK_Installation_Guide.pdf
+
+One Page Users Guide :          http://chdk.fandom.com/wiki/One_Page_Ultra-Quick_Users_Guide
+
+Prepare Your SD Card :          http://chdk.fandom.com/wiki/Prepare_your_SD_card
+
+
+
+

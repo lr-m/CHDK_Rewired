@@ -1,0 +1,19 @@
+@title ACOG 4x
+# Scope tube, red chevron and a bullet-drop ladder below it.
+@elps 180, 120, 94, 84, grey_dark
+@elps 180, 120, 93, 83, grey_dark
+@elps 180, 120, 92, 82, grey_dark
+# chevron
+@line 164, 124, 180, 108, red
+@line 165, 124, 180, 109, red
+@line 196, 124, 180, 108, red
+@line 195, 124, 180, 109, red
+# bullet-drop ladder
+@line 180, 130, 180, 178, red
+@line 166, 142, 194, 142, red
+@line 169, 158, 191, 158, red
+@line 172, 170, 188, 170, red
+@line 175, 176, 185, 176, red
+# windage stadia
+@line 126, 108, 152, 108, red
+@line 208, 108, 234, 108, red

@@ -1,0 +1,205 @@
+Detailed change history is available from subversion https://www.assembla.com/code/chdk/subversion/commits
+
+=1.7=
+Unstable development branch. Significant changes should be recorded below.
+Development planning thread https://chdk.setepontos.com/index.php?topic=14633.0
+
+Significant changes in 1.7
+* New XIMR based drawing system for CHDK UI in Digic 6 & 7, resolves flickering issues ([https://chdk.setepontos.com/index.php?topic=12788.msg146269#msg146269 development thread])
+* Functionality for Lua scripts to detect if screen has been erased and needs redrawing
+* RAW EV Histogram ([https://chdk.setepontos.com/index.php?topic=14544.msg148257#msg148257 development thread])
+* Lua functions to get focal length from zoom position ([https://chdk.setepontos.com/index.php?topic=14733.msg149503#msg149503 discussion])
+* Lua module zoomutil.lua providing functions set zoom by focal length and convert between FL and EFL
+* Fix lua "restore" silently exiting after a few statements, terminate if it runs for more than 1 second. Also backported to 1.6 ([https://chdk.setepontos.com/index.php?topic=14793.0 details])
+* In script with chdk_version >= 1.7, jog dial and front dial are treated as keys named "jogdial_left", "frontdial_right" etc by wait_click and is_key, and hidden from Canon firmware. ([https://chdk.setepontos.com/index.php?topic=14861 discussion])
+* Fix unpredictable crash when grids shown. Also backported to 1.6 ([https://chdk.setepontos.com/index.php?topic=14634.msg150360#msg150360 bug report])
+
+New script functions in 1.7:
+
+ screen_needs_refresh
+ get_focal_length
+ get_eff_focal_length
+ drawings.unpack_cnf_colors
+ drawings.pack_cnf_colors
+
+=1.6=
+Current stable branch, released Oct 12, 2020 as 1.6.1
+
+Development planning thread https://chdk.setepontos.com/index.php?topic=14150.0
+
+Compatibility with 1.5:
+* CHDK 1.5 scripts should be compatible.
+  CHDK 1.6 adds additional functions, but does not significantly change behavior of existing functions. If @chdk_version is not specified in the script header, a warning is displayed and CHDK 1.3 compatible behavior is used.
+* CFG files: CHDK 1.6 uses the same CFG files as 1.5.
+  It should generally be compatible and retain your settings, but if you don't want to risk re-doing your CFG, backing up the CHDK/*.CFG files before updating is recommended. CFGs from earlier versions back to 1.2 should also probably work.
+* Modules, language files and Lua libraries are NOT compatible.
+  You must update these when you update your build, meaning use the "full" download.
+
+Significant changes in 1.6:
+* Support floating point math in Lua with fmath library
+https://chdk.fandom.com/wiki/Lua/Lua_Reference#Floating_point_mathematical_functions_(fmath_library)
+([https://chdk.setepontos.com/index.php?topic=14305.msg145763#msg145763 development thread])
+* Option to show zebra outside of half press
+* Screen recording module
+([https://chdk.setepontos.com/index.php?topic=14347.0 development thread])
+
+New script functions in 1.6:
+
+ get_current_delta_sv96
+ get_current_base_sv96
+ fmath.* functions
+
+=1.5=
+Obsolete, released Nov 15, 2020 as 1.5.1
+Development planning thread http://chdk.setepontos.com/index.php?topic=12684.0
+
+Compatibility with 1.4:
+* CHDK 1.4 scripts should be compatible.
+  CHDK 1.5 adds additional functions, but does not significantly change behavior of existing functions. If @chdk_version is not specified in the script header, a warning is displayed and CHDK 1.3 compatible behavior is used.
+* CFG files: CHDK 1.5 uses the same CFG files as 1.4.
+  It should generally be compatible and retain your settings, but if you don't want to risk re-doing your CFG, backing up the CHDK/*.CFG files before updating is recommended. CFGs from 1.3 or 1.2 should also probably work.
+* Modules, language files and Lua libraries are NOT compatible.
+  You must update these when you update your build, meaning use the "full" download.
+
+Significant changes in 1.5:
+* Support for many Digic 6 cameras, and preliminary support for Digic 7.
+* Support analog video detect, HDMI hotplug and battery temperature ADC as alternate triggers for USB Remote (https://chdk.fandom.com/wiki/USB_Remote).  ([https://chdk.setepontos.com/index.php?topic=13451.0 development thread])
+* Enable analog video out in record mode on cameras which do not support in Canon firmware*. ([https://chdk.setepontos.com/index.php?topic=13451.msg142512#msg142512 development thread])
+* Fixed PTP failures at certain transfer sizes on some cameras, random crashes on VxWorks ([https://chdk.setepontos.com/index.php?topic=4338.msg139820#msg139820 discussion])
+* Improved script set_zoom behavior on many Digic 4 and later cameras: Avoid crashes, support script set_zoom_speed, Canon jpeg distortion correction applied as with manual zoom, focus distance more reliably preserved ([https://chdk.setepontos.com/index.php?topic=7071.msg141638#msg141638 development thread 1] [https://chdk.setepontos.com/index.php?topic=13875.80 development thread 2])
+* Improved ND filter support: ND state and exposure value available from script, ND overrides update Av propcases like Canon firmware on ND only cameras, ND overrides work in more cases. ([https://chdk.setepontos.com/index.php?topic=13228.0 development thread])
+* Support PTP remote shoot with Canon native CR2 raw, on cameras with native raw support ([https://chdk.setepontos.com/index.php?topic=13725.0 development thread])
+* Script access to raw/jpeg settings on cameras with native raw support ([https://chdk.setepontos.com/index.php?topic=13725.0 development thread])
+* Support preserving CHDK install when formatting card. ([https://chdk.setepontos.com/index.php?topic=13784.10 development thread])
+* Attempt to verify integrity of factory firmware on first CHDK boot. ([https://chdk.setepontos.com/index.php?topic=14052.0 development thread])
+* Clean HDMI out in rec mode (only on EOS M and G*X cameras with native HDMI out in rec support) ([https://chdk.setepontos.com/index.php?topic=13489.0 development thread])
+* Attempt to check build compatibility at startup. Where possible, an LED will blink when an incompatible build is booted. ([http://chdk.setepontos.com/index.php?topic=10561.0 development thread])
+* User configurable option to enable/disable the RAW toggle shortcut key - with option to toggle the OSD RAW status indicator when RAW is enabled
+
+Note:
+* Alternate remote inputs and analog AV unlock are only supported on a few models, but support may be easy to add, so please request on the forum if you need this functionality.
+
+New script functions in 1.5:
+
+ get_min_av96
+ get_max_av96
+ get_nd_value_ev96
+ get_nd_current_ev96
+ get_current_av96
+ get_current_tv96
+ get_imager_active
+ get_canon_image_format
+ get_canon_raw_support
+ set_canon_image_format
+ set_clock
+ force_analog_av
+ get_digic
+
+See https://chdk.fandom.com/wiki/CHDK_Scripting_Cross_Reference_Page for descriptions
+
+
+
+=1.4=
+Obsolete, released Nov 29 2015 as 1.4.1.
+
+Compatibility with 1.3:
+* Scripts are generally compatible.
+  You will see a warning if @chdk_version is not specified in the script header, but 1.3 compatible behavior will be used. If you use @chdk_version 1.4, the return values of some functions are changed.
+  See https://subversion.assembla.com/svn/chdk/trunk/CHDK/LUALIB/wrap13.lua for a list of functions with changed return values
+* Some CHDK script mode numbers have changed, and some names have been removed. This does not affect common modes like, M, P and Auto, but might affect scripts that use more obscure modes, especially if the are referred to by number rather than capmode.lua names
+* CFG files: CHDK 1.4 uses the same CFG files as 1.3.
+  It should generally be compatible and retain your settings, but if you don't want to risk re-doing your CFG, backing up the CHDK/*.CFG files before updating is recommended.  Custom colors will be reset, and if you switch back to 1.3, colors may be incorrect. CHDK 1.2 CFGs should be migrated as was done for 1.3.
+* Modules and language files are NOT compatible. You must update these when you update your build.
+
+Significant changes:
+* long file name support in script, file browser / selector.
+  Discussion http://chdk.setepontos.com/index.php?topic=10833.0
+* enhanced script @parameter header including compact format, Boolean values, table support, and full variable names in Lua.
+  Documentation: http://chdk.fandom.com/wiki/CHDK_Script_Header#Lua_Shorthand_Parameter_Syntax
+  Discussion: http://chdk.setepontos.com/index.php?topic=12121.0
+* upper and lower case single characters can now be used as @param variables in uBASIC
+* script header now supports @subtitle for better organization in script that use many parameters
+* Lua scripts now "compile" when loaded to reduce memory needed (original script text no longer stored in memory)
+  Discussion: http://chdk.setepontos.com/index.php?topic=12117.msg118923#msg118923
+* Added @chdk_version parameter to specify version of CHDK script was written for, 1.3 assumed if none present.
+  Discussion: http://chdk.setepontos.com/index.php?topic=12138.0
+* Made Lua script API use of boolean values more consistent, (@chdk_version 1.3 provides backward compatible behavior)
+  Development thread http://chdk.setepontos.com/index.php?topic=12138.0
+* enhanced UI functions for touchscreen equipped cameras - touching menu areas and window buttons directly now works
+  Discussion: http://chdk.setepontos.com/index.php?topic=12090.msg118468#msg118468
+* rework of CHDK color palette handling to allow separate palette definitions for each camera model - transparent grey color defined for OSD background use
+  Discussion http://chdk.setepontos.com/index.php?topic=12046.msg118169#msg118169
+* updates to GPS functionality for cameras with built-in GPS
+* improvements in console handling when script running including console not timing out and console reset to "on" state when script errors are encountered.
+* upgrades to Lua RAW shooting hooks to allow analysis and modification of RAW buffer during shooting
+  Documentation: http://chdk.fandom.com/wiki/Lua/Raw_Hook_Operations
+  Discussion: http://chdk.setepontos.com/index.php?topic=11081.10
+* scripts added to the User Menu can now be started directly from the User Menu via a full press on the shutter button.  Using Func/Set now brings up a dialog box for ok/cancel.  Selecting ok makes the script the current script and exits to the Script menu.
+* usb_force_active now available on almost all cameras
+* filewrite / remote capture support for many more cameras
+* development support for digic 6 / thumb2 cameras
+* Improved focus overrides
+  Discussion http://chdk.setepontos.com/index.php?topic=12103.10
+* Convert shot histogram code to a module.
+
+=1.3=
+Obsolete, released Dec 18 2014. Implemented new features are listed below :
+* Address some of the longstanding issues with focus overrides - especially in scripts. Discussion: http://chdk.setepontos.com/index.php?topic=11078.0
+* Hooks to allow Lua to run at specific points in the shooting process. Discussion: http://chdk.setepontos.com/index.php?topic=11081.0
+* Increase available memory, allow CHDK to allocate from multiple pools. Discussion: http://chdk.setepontos.com/index.php?topic=10886.0
+* Eye-fi support
+* Splitting the CHDK configuration files into 4 parts for better management
+* Improved Lua cfg access from lua
+* Allow scripts to configure script interrupt key
+* Improved script control of OSD via set_draw_title_line()
+* Various clean-ups to which OSD icons get displayed and when
+* Improved script functions for working with APEX96  exposure values
+* Allow scripts to set shooting exposure parameters inside half shoot
+* Added font scaling to Lua draw_string() function
+* Added OSD font scaling and OSD editor upgrade to support it
+* Added option to launch the current script on entry to <ALT> mode
+* Added script function that locks out Canon automatic exposure adjustments
+* Added support for > 64 second exposures all cameras (thanks koshy and nafraf)
+* Added support for USB remote capture on many more cameras (thanks koshy and nafraf)
+* Added os.idir, iterates over directory listings without loading the whole list in memory.
+* Fix long standing FsIoNotify crash issues http://chdk.setepontos.com/index.php?topic=6179.msg111410#msg111410
+* added user choice for where RAW/DNG files are saved (with jpg, seperate DCIM folder, seperate RAW tree), also fixed naming of seperate DCIM folder
+* added choice of DNG crop  (full, active, JPG)
+* added ability to enable a high speed timer to improve USB remote timing precision and accuracy
+* added battery third terminal remote trigger capability (enabled for selected cameras only)
+* added hotshoe control capability (for cameras with hotshoes of course)
+
+=1.2=
+Obsolete, released July 30 2013. The following major features were implemented for 1.2.
+* intermittent Lua crashing bug fixed (finally. Also backported to 1.1)
+* Improved UI - discussion thread http://chdk.setepontos.com/index.php?topic=8151.0
+** menu items renamed and sometimes moved for clarity
+** input of numeric values simplified
+** the "Disable Overrides" menu item is now understandable
+** Tv override input value can be in Ev step,  seconds or HHMMSS format
+* Remote capture over USB
+* Improved DNG performance, now very close to framebuffer raw
+* Support raw operations on DNG
+* Improved memory usage by moving more code to modules
+* Fast integer based trigonometric functions for Lua
+* new editor for User Menu
+* scripts can be added to the User Menu
+* menu option to enable Lua native calls
+* menu option to disable keyboard shortcuts
+* improve console mode with menu options to extend the visibility time of console or review (scroll back) console output
+* loadable palette values allow a better range of colors in the UI  (not implemented on all cameras)
+* auto operation of internal / external flash enabled when other exposure values are in "M" mode
+* enhanced UI for script parameters :  @value allows use of named input values rather than just numeric
+* scripts can be set to always use the default parameter values in the code rather than stored parameters
+* ISO input for override, bracketing and auto-ISO now use approximately the same units as Canon UI ("market" ISO)
+* addition of an annoying "help" window that continuously pops up in <ALT> mode until you figure out how to disable it from the CHDK menu
+
+=1.1=
+Obsolete, released July 25 2012. Major features added in this release include
+* Loadable binary modules
+* Re-write of USB remote code
+* "Live view" over the CHDK PTP Extension
+* Integration of chdkde features (actually got added to previous stable too)
+
+=1.0=
+Obsolete, released Feb 2012.

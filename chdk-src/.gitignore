@@ -1,0 +1,76 @@
+# CHDK build tree ignores.
+#
+# Upstream CHDK ships no .gitignore (it is an SVN mirror), so a built tree shows
+# ~700 untracked files. Everything below is either produced by `make` or is
+# Canon firmware that must not be redistributed.
+
+# ---- Canon firmware -------------------------------------------------------
+# ROM dumps and firmware update files. These are Canon's copyrighted code:
+# dump your own camera (CHDK/SCRIPTS/dumprom.lua) and drop the result into
+# platform/<cam>/sub/<fw>/PRIMARY.BIN. Never commit or publish them.
+*.BIN
+*.FIR
+
+# ---- Compiler output ------------------------------------------------------
+*.o
+*.a
+*.elf
+*.elf.syms
+*.bin
+*.bin.dump
+*.flt
+.o/
+
+# Final build products (DISKBOOT.BIN, PS.FIR, release zips)
+bin/
+
+# ---- Generated sources and headers ----------------------------------------
+lib/font/font_8x16_uni_packed.h
+lib/lang/lang_str.h
+modules/exportlist.inc
+modules/module_exportlist.h
+modules/module_hashlist.c
+
+# Emitted by the build after comparing against PRIMARY.BIN. The g7x2 one is
+# checked in upstream, so it stays visible.
+platform/*/sub/*/bin_compat.h
+!platform/g7x2/sub/120a/bin_compat.h
+
+# Build stamps
+revision.inc
+doc/camnotes.txt
+doc/readme.txt
+
+# Card content assembled by CHDK/Makefile
+CHDK/DATA/logo.dat
+CHDK/LUALIB/GEN/*.lua
+CHDK/MODULES/
+
+# ---- Local configuration --------------------------------------------------
+# Per-machine build overrides. Copy localbuildconf.inc.example to get started.
+localbuildconf.inc
+
+# ---- Compiled host tools --------------------------------------------------
+tools/bend_selftest
+tools/bitbend_selftest
+tools/code_gen
+tools/dancingbits
+tools/finsig_dryos
+tools/finsig_vxworks
+tools/font_8x16_pack
+tools/gen_conf_lua
+tools/gensig_dryos
+tools/gensig_vxworks
+tools/makeexport
+tools/makelang
+tools/pakwif
+tools/elf2flt/elf2flt
+tools/elf2flt/fltdump
+tools/packfi2/fi2enc
+
+# ---- Editor and OS junk ---------------------------------------------------
+*.swp
+*~
+.DS_Store
+__pycache__/
+*.pyc

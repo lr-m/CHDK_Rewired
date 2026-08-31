@@ -1,0 +1,15 @@
+
+*** Build Information ***
+CHDK for a640 fw:100b PID:12601
+build:1.7.0-0 date:Wed, 19 Aug 2026 00:38:29 +0100
+
+*** Camera specific notes ***
+****************************************
+
+Camera depending notes: 
+
+- A640 uses Propset 1 of Properties (see http://tinyurl.com/6zbv9b)
+- A640 does have a real IRIS Diaphragm, it does not have an ND Filter! 
+Mind this.
+- cam supports multipartitions
+

@@ -1,0 +1,11 @@
+CHDK Rewired - PowerShot A640
+firmware: 100b
+
+DISKBOOT.BIN md5 4cd3ff6c49a75086ece971cc26f7fab5
+PS.FIR       md5 f5ce18cf9c3d0bd75af743ca498b33e0
+
+Bend mode, persistent OSD, record UI. Custom boot screen is not enabled.
+
+Card volume label RWD_A640 - it must NOT be CHDK. On FAT the volume label
+is an entry in the root directory, so a card labelled CHDK collides with
+the CHDK directory itself: modules stop loading and settings stop saving.

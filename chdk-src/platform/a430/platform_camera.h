@@ -1,0 +1,186 @@
+// Camera - a430 - platform_camera.h
+
+// This file contains the various settings values specific to the a430 camera.
+// This file is referenced via the 'include/camera.h' file and should not be loaded directly.
+
+// If adding a new settings value put a suitable default in 'include/camera.h',
+// along with documentation on what the setting does and how to determine the correct value.
+// If the setting should not have a default value then add it in 'include/camera.h'
+// using the '#undef' directive along with appropriate documentation.
+
+// Override any default values with your camera specific values in this file. Try and avoid
+// having override values that are the same as the default value.
+
+// When overriding a setting value there are two cases:
+// 1. If removing the value, because it does not apply to your camera, use the '#undef' directive.
+// 2. If changing the value it is best to use an '#undef' directive to remove the default value
+//    followed by a '#define' to set the new value.
+
+// When porting CHDK to a new camera, check the documentation in 'include/camera.h'
+// for information on each setting. If the default values are correct for your camera then
+// don't override them again in here.
+
+    #define CAM_PROPSET                     1
+
+    #define CAM_RAW_ROWPIX                  2392    // for 4 MP 1/3" sensor size
+    #define CAM_RAW_ROWS                    1752    // for 4 MP 1/3" sensor size
+
+    #undef  CAM_USE_ZOOM_FOR_MF
+    #undef  CAM_HAS_ZOOM_LEVER
+    #define CAM_DRAW_EXPOSITION             1
+    #undef  CAM_HAS_IRIS_DIAPHRAGM
+    #define CAM_ADJUSTABLE_ALT_BUTTON       1
+    #define CAM_ALT_BUTTON_NAMES            { "Print", "Display" }
+    #define CAM_ALT_BUTTON_OPTIONS          { KEY_PRINT, KEY_DISPLAY }
+    #undef  CAM_HAS_ERASE_BUTTON
+    #define CAM_HAS_ND_FILTER               1
+    #undef  CAM_HAS_MANUAL_FOCUS
+    #undef  CAM_HAS_USER_TV_MODES
+    #define CAM_SHOW_OSD_IN_SHOOT_MENU      1
+    #undef  CAM_HAS_IS
+    #define CAM_CAN_MUTE_MICROPHONE         1
+	#define CAM_AF_SCAN_DURING_VIDEO_RECORD	1 //crashes, when used in 640x480 mode
+    #define CAM_EV_IN_VIDEO                 1
+
+    #define CAM_DNG_LENS_INFO               { 54,10, 216,10, 28,10, 58,10 } // See comments in camera.h
+    // pattern
+    #define cam_CFAPattern                  0x01000201  // Green Blue Red Green
+    // color
+    #define CAM_COLORMATRIX1                              \
+     479627, 1000000, -156240, 1000000,  -84926, 1000000, \
+    -215238, 1000000,  534902, 1000000,   60219, 1000000, \
+     -96906, 1000000,  148194, 1000000,  191583, 1000000
+
+    #define cam_CalibrationIlluminant1      1       // Daylight
+    // cropping
+    #define CAM_JPEG_WIDTH                  2272
+    #define CAM_JPEG_HEIGHT                 1704
+    #define CAM_ACTIVE_AREA_X1              0
+    #define CAM_ACTIVE_AREA_Y1              8
+    #define CAM_ACTIVE_AREA_X2              2336
+    #define CAM_ACTIVE_AREA_Y2              1748
+    // camera name
+    #define PARAM_CAMERA_NAME               3       // parameter number for GetParameterData
+
+    #define CAM_HAS_FILEWRITETASK_HOOK      1
+
+    #define CAM_SD_OVER_IN_AF               1
+    #define CAM_SD_OVER_IN_AFL              1
+    #define CAM_SD_OVER_IN_MF               1
+
+    #define CAM_IS_VID_REC_WORKS            1   // is_video_recording() function works
+    #undef  CAM_MASK_VID_REC_ACTIVE             // allow video recording state to change reported shooting mode
+    
+
+//--------------------------------------------------
+
+    #undef  CAM_DEFAULT_MENU_CURSOR_BG
+    #undef  CAM_DEFAULT_MENU_CURSOR_FG
+    #define CAM_DEFAULT_MENU_CURSOR_BG  IDX_COLOR_RED      // Override menu cursor colors
+    #define CAM_DEFAULT_MENU_CURSOR_FG  IDX_COLOR_WHITE    // Override menu cursor colors
+
+//--------------------------------------------------
+// Circuit Bending - see BENDING_DESIGN.md
+//
+// Derived from the A430 100b firmware. Third camera in the VxWorks/DIGIC II family after
+// the A460 and A410, and the keymap is identical to both of them down to the
+// bit masks. 10 bit sensor, 2392x1752.
+
+    #define CAM_ADJUSTABLE_ALT_BUTTON       1
+    #define CAM_ALT_BUTTON_NAMES            { "Print", "Display" }
+    #define CAM_ALT_BUTTON_OPTIONS          { KEY_PRINT, KEY_DISPLAY }
+
+    #define CAM_BEND_MODE                   1
+    #define CAM_BEND_HOLD_MS                1000
+
+    // The second engine - docs/EXPERIMENTAL_EFFECTS.md. Nothing in it is
+    // camera specific: raw.c hands it the buffers this port already supplies,
+    // and the 10bpp packed fast path is the one this sensor uses.
+    //
+    // As on the A410, and unlike the A470 and A480, the JPEG bus is a dead
+    // entry: this is a VxWorks build with no "JPEG BUFF %p" logging and so no
+    // literal table for to recover the encoder's buffer from.
+    // There is no hook_jpeg_buffer() here, the generic weak one returns null,
+    // and that one effect does nothing. Every other effect is live.
+    #define CAM_BEND_EXPERIMENTAL           1
+
+    // No separate zoom control - the up and down arrows are the zoom, as on
+    // the A410 and the A470. So no CAM_BEND_ENTER_UP (UP belongs to the lens,
+    // and the patchbay is entered by holding the ALT button) and no
+    // CAM_BEND_PRESET_ARROWS (there is no rocker to walk presets with).
+    //
+    // The keymap has no KEY_ZOOM_IN / KEY_ZOOM_OUT at all, which is the same
+    // signature both of those bodies have. Bend mode itself is unaffected: it
+    // is a GUI mode that owns the keyboard, and inside it the arrows are the
+    // arrows.
+    #define CAM_BEND_NO_ROCKER              1
+
+    //-- the record UI ------------------------------------------------------
+    //
+    // Propset 1, which core/gui_recui.c has had a value map for since the
+    // A410. This body matches that block's assumptions exactly - no manual
+    // focus, ND filter, no iris, no IS - and its iso_table[] has five entries,
+    // which the ISO row reads at runtime rather than assuming.
+    #define CAM_RECUI                       1
+    #define CAM_RECUI_UPDOWN_IS_ZOOM        1
+
+    // SIZE and QUALITY, from the JPEG size estimator at 0xffcff410 - the same
+    // [resolution][quality] grid the A410's came from, recovered by
+    // the firmware:
+    //
+    //   2050048 1142784 569344    <- 2272x1704, = CAM_JPEG_* above
+    //   1026048  571392 284672    <- 1600x1200
+    //    583680  327680 174080    <- 1024x768
+    //    583680  327680 174080    <- index 3, a copy of the row above
+    //    254976  153600  86016    <- 640x480
+    //
+    // Index 3 exists and produces nothing new. The A410 fills that slot with
+    // zeros and the A460 and A540 do too; this ROM fills it with a duplicate,
+    // which says the same thing - a reserved index. Offering it would put two
+    // entries on the SIZE row that are indistinguishable on the camera, so it
+    // is skipped, exactly as the A410 skips its own index 3.
+    //
+    // Three of these rows are byte-identical to the A410's and the A470's at
+    // the pixel sizes the bodies share, which is what ties the row order to
+    // the dimensions.
+    #define CAM_RECUI_SIZE_VALS     { 0, 1, 2, 4 }
+    #define CAM_RECUI_SIZE_NAMES    { "L", "M1", "M2", "S" }
+    #define CAM_RECUI_SIZE_DIMS     { {2272,1704}, {1600,1200}, {1024,768}, \
+                                      { 640, 480} }
+    #define CAM_RECUI_QUALITY_VALS  { 0, 1, 2 }
+    #define CAM_RECUI_QUALITY_NAMES { "SUPERFINE", "FINE", "NORMAL" }
+
+    // As on the A410: the write is legal whichever way value 2 reads, and only
+    // the label is at risk. If this body means continuous AF rather than the
+    // self-timer, it is one word here.
+    #define CAM_RECUI_DRIVE_VALS    { 0, 1, 2 }
+    #define CAM_RECUI_DRIVE_NAMES   { "SINGLE", "CONTINUOUS", "TIMER" }
+
+    #undef  CAM_OSD_REDRAW_MASK
+    #define CAM_OSD_REDRAW_MASK             1   // 40ms, matching the other four
+    #define CAM_PERSISTENT_OSD              1
+
+    // Date/time prompt suppression. 0x2020 is returned by clock_is_valid()
+    // (two leaf entry points, 0xffc1a524 and 0xffc1a534) and set by the RTC
+    // module at 0xffc1a1e4. All three candidate date gates agree on it.
+    //
+    // CAM_DATE_PROMPT_LATCH is deliberately NOT defined. This camera's gate at
+    // 0xffd61ae0 is the A460's minus the pre-test: it calls clock_is_valid(),
+    // shows the screen if the clock is invalid, then writes 1 to 0x6c74 on the
+    // way out - and 0x6c74 is written in exactly one place and read nowhere in
+    // the whole ROM. It records that the screen was shown; it does not gate
+    // anything, so setting it would achieve nothing. The latch is optional in
+    // main.c (nested inside the clock-flag #ifdef) and the clock flag alone is
+    // what suppresses the prompt.
+    #define CAM_CLOCK_VALID_FLAG            0x2020
+
+    // Custom boot screen. Reached through the My Camera theme cache table
+    // rather than a ROM JPEG pointer - see sub/100b/boot.c for the whole path
+    // and BOOTSCREEN_PORTING.md for how it was traced.
+    #define CAM_STARTUP_IMAGE               1
+    // Runtime replacements for the shutter, operation/button and self-timer
+    // entries in Canon's My Camera asset cache.
+    #define CAM_CUSTOM_SOUNDS               1
+    // Entry of the StartupImage task, replaced in createHook so we run before
+    // Canon allocates and draws. See sub/100b/boot.c.
+    #define CAM_STARTUP_IMAGE_TASK          0xffd61e4c

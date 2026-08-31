@@ -1,0 +1,3 @@
+This folder contains header files to mimic C standard/system header files.
+Allows Lua source code to be used mostly unmodified.
+This also allows the CHDK source to be used for building host programs e.g. tools/hostlua and tools/ubasic_test.

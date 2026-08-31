@@ -1,0 +1,26 @@
+@title Sniper mil-dot
+# Heavy outer posts, thin centre crosshair, mil dots on both axes.
+@line  54, 119, 112, 119, black
+@line  54, 120, 112, 120, white
+@line  54, 121, 112, 121, black
+@line 306, 119, 248, 119, black
+@line 306, 120, 248, 120, white
+@line 306, 121, 248, 121, black
+@line 179,  34, 179,  72, black
+@line 180,  34, 180,  72, white
+@line 181,  34, 181,  72, black
+@line 179, 206, 179, 168, black
+@line 180, 206, 180, 168, white
+@line 181, 206, 181, 168, black
+# fine cross through the centre
+@line 112, 120, 248, 120, white
+@line 180,  72, 180, 168, white
+# mil dots
+@elpsf 150, 120, 2, 2, white
+@elpsf 165, 120, 2, 2, white
+@elpsf 195, 120, 2, 2, white
+@elpsf 210, 120, 2, 2, white
+@elpsf 180,  93, 2, 2, white
+@elpsf 180, 106, 2, 2, white
+@elpsf 180, 134, 2, 2, white
+@elpsf 180, 147, 2, 2, white

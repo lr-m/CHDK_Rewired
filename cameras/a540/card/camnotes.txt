@@ -1,0 +1,13 @@
+
+*** Build Information ***
+CHDK for a540 fw:100b PID:12571
+build:1.7.0-0 date:Wed, 19 Aug 2026 11:11:45 +0100
+
+*** Camera specific notes ***
+****************************************
+
+Camera depending notes: 
+
+- A540 uses Propset 1 of Properties (see http://tinyurl.com/6zbv9b)
+- A540 does have a real IRIS Diaphragm, it does not have an ND Filter! 
+

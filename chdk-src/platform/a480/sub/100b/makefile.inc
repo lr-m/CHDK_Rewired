@@ -1,0 +1,29 @@
+#PLATFORMID=0x31BF
+PLATFORMID=12735
+
+PLATFORMOS=dryos
+
+# Force ARAM on for a480, and load CHDK in ARAM
+override OPT_ARAM_MALLOC=1
+override OPT_CHDK_IN_ARAM=1
+
+# Set up size variables for AgentRAM
+ARAM_HEAP_START=0x2ce000
+ARAM_HEAP_SIZE=0x32000
+
+ifdef OPT_CHDK_IN_ARAM
+MEMISOSTART=$(ARAM_HEAP_START)
+else
+MEMISOSTART=0x102438
+endif
+
+ROMBASEADDR=0xFFC00000
+
+NEED_ENCODED_DISKBOOT=2  
+KEYSYS=d4
+
+# boot.c embeds the generated startup WAV directly.
+boot.o: boot_sound.h
+
+
+PLATFORMOSVER=31

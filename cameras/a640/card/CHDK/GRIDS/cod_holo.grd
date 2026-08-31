@@ -1,0 +1,9 @@
+@title Holo sight
+# Large ring with inward ticks and a centre dot, EOTech style.
+@elps 180, 120, 44, 39, red
+@line 180,  81, 180,  91, red
+@line 180, 159, 180, 149, red
+@line 136, 120, 146, 120, red
+@line 224, 120, 214, 120, red
+@elpsf 180, 120, 2, 2, red_light
+@elps  180, 120, 6, 5, red_dark

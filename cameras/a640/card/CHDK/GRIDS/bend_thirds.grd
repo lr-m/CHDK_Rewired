@@ -1,0 +1,12 @@
+@title Bend thirds + centre
+# Rule-of-thirds frame with a small centre crosshair.
+@line 119, 0, 119, 239, 17
+@line 240, 0, 240, 239, 17
+@line 0, 79, 359, 79, 17
+@line 0, 160, 359, 160, 17
+@line 169, 119, 175, 119, 17
+@line 183, 119, 189, 119, 17
+@line 179, 109, 179, 115, 17
+@line 179, 123, 179, 129, 17
+@elps 179, 119, 4, 4, 17
+

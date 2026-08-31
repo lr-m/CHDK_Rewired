@@ -1,0 +1,11 @@
+CHDK Rewired - PowerShot A430
+firmware: 100b
+
+DISKBOOT.BIN md5 d3cd158f157a3a64501ab9ee18dfb72d
+PS.FIR       md5 a37d41d1c14665cbc3750040e614b043
+
+Bend mode, persistent OSD, record UI, custom sounds, custom boot screen.
+
+Card volume label RWD_A430 - it must NOT be CHDK. On FAT the volume label
+is an entry in the root directory, so a card labelled CHDK collides with
+the CHDK directory itself: modules stop loading and settings stop saving.

@@ -1,0 +1,11 @@
+@title Red dot sight
+# Ring housing with cardinal ticks and a fine centre dot.
+# Circles use ry = rx * 8/9 so they stay round on the 4:3 display.
+@elps 180, 120, 60, 53, red_dark
+@elps 180, 120, 59, 52, red_dark
+@line 180,  67, 180,  78, red_dark
+@line 180, 173, 180, 162, red_dark
+@line 120, 120, 131, 120, red_dark
+@line 240, 120, 229, 120, red_dark
+@elps  180, 120, 8, 7, red_dark
+@elpsf 180, 120, 3, 3, red

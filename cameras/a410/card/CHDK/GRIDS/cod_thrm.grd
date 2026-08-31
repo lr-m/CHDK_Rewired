@@ -1,0 +1,30 @@
+@title Thermal scope
+# HUD frame, corner brackets and a gapped centre cross.
+@rect 54, 30, 306, 210, grey
+@line  64,  42,  84,  42, white
+@line  64,  42,  64,  58, white
+@line 296,  42, 276,  42, white
+@line 296,  42, 296,  58, white
+@line  64, 198,  84, 198, white
+@line  64, 198,  64, 182, white
+@line 296, 198, 276, 198, white
+@line 296, 198, 296, 182, white
+# target box corners
+@line 142,  92, 158,  92, white
+@line 142,  92, 142, 106, white
+@line 218,  92, 202,  92, white
+@line 218,  92, 218, 106, white
+@line 142, 148, 158, 148, white
+@line 142, 148, 142, 134, white
+@line 218, 148, 202, 148, white
+@line 218, 148, 218, 134, white
+# centre cross with a clear aiming gap
+@line 156, 120, 172, 120, white
+@line 188, 120, 204, 120, white
+@line 180,  98, 180, 112, white
+@line 180, 128, 180, 142, white
+# range scale
+@line 160, 188, 200, 188, grey_light
+@line 160, 184, 160, 192, grey_light
+@line 180, 185, 180, 191, grey_light
+@line 200, 184, 200, 192, grey_light

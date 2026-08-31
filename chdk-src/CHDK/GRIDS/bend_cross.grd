@@ -1,0 +1,9 @@
+@title Bend crosshair
+# Fine centre reticle with an open aiming point.
+@line 179, 72, 179, 112, 17
+@line 179, 127, 179, 167, 17
+@line 112, 119, 171, 119, 17
+@line 187, 119, 246, 119, 17
+@elps 179, 119, 8, 8, 17
+@elps 179, 119, 2, 2, 17
+

@@ -1,0 +1,11 @@
+CHDK Rewired - PowerShot A410
+firmware: 100e
+
+DISKBOOT.BIN md5 0549047fe07057eff8724a81f349f992
+PS.FIR       md5 0c385dad5e2bdda039a4700271cb890d
+
+Bend mode, persistent OSD, record UI. No custom boot screen - this ROM has no startup image to replace.
+
+Card volume label RWD_A410 - it must NOT be CHDK. On FAT the volume label
+is an entry in the root directory, so a card labelled CHDK collides with
+the CHDK directory itself: modules stop loading and settings stop saving.

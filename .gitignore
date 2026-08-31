@@ -1,0 +1,71 @@
+# Build output.
+chdk-src/bin/*
+!chdk-src/bin/.gitkeep
+*.o
+*.a
+*.elf
+*.elf.syms
+*.bin
+*.bin.dump
+*.flt
+.o/
+
+# Canon firmware. ROM dumps and .FIR update files are Canon's copyrighted
+# code and must not be committed or published.
+*.BIN
+*.FIR
+!cameras/*/card/DISKBOOT.BIN
+!cameras/*/card/PS.FIR
+
+# Generated sources and headers.
+chdk-src/lib/font/font_8x16_uni_packed.h
+chdk-src/lib/lang/lang_str.h
+chdk-src/modules/exportlist.inc
+chdk-src/modules/module_exportlist.h
+chdk-src/modules/module_hashlist.c
+chdk-src/platform/*/sub/*/bin_compat.h
+chdk-src/revision.inc
+chdk-src/doc/camnotes.txt
+chdk-src/doc/readme.txt
+chdk-src/CHDK/LUALIB/GEN/*.lua
+chdk-src/CHDK/MODULES/
+
+# Per-machine build overrides. Copy localbuildconf.inc.example to get started.
+chdk-src/localbuildconf.inc
+
+# Compiled host tools.
+chdk-src/tools/bend_selftest
+chdk-src/tools/bitbend_selftest
+chdk-src/tools/code_gen
+chdk-src/tools/dancingbits
+chdk-src/tools/finsig_dryos
+chdk-src/tools/finsig_thumb2
+chdk-src/tools/finsig_vxworks
+chdk-src/tools/font_8x16_pack
+chdk-src/tools/gen_conf_lua
+chdk-src/tools/gensig_dryos
+chdk-src/tools/gensig_vxworks
+chdk-src/tools/makeexport
+chdk-src/tools/makelang
+chdk-src/tools/pakwif
+chdk-src/tools/elf2flt/elf2flt
+chdk-src/tools/elf2flt/fltdump
+chdk-src/tools/packfi2/fi2enc
+
+# Game Boy ROMs. Not ours to redistribute - put your own in CHDK/GBC/.
+cameras/*/card/CHDK/GBC/*.gb
+cameras/*/card/CHDK/GBC/*.gbc
+cameras/*/card/CHDK/GBC/*.GB
+cameras/*/card/CHDK/GBC/*.GBC
+
+# Camera-written logs and settings.
+cameras/*/card/CHDK/LOGS/*
+cameras/*/card/CHDK/BENDS/*.BND
+cameras/*/card/CHDK/DATA/*.CFG
+
+# Editor and OS junk.
+*.swp
+*~
+.DS_Store
+__pycache__/
+*.pyc

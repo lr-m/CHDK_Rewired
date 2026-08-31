@@ -1,0 +1,11 @@
+@title Bend safe frame
+# 90% and 80% guides, centre marks, and diagonals for destructive framing.
+@rect 18, 12, 341, 227, 17
+@rect 36, 24, 323, 215, 17
+@line 36, 24, 179, 119, 17
+@line 323, 24, 179, 119, 17
+@line 36, 215, 179, 119, 17
+@line 323, 215, 179, 119, 17
+@line 169, 119, 189, 119, 17
+@line 179, 109, 179, 129, 17
+

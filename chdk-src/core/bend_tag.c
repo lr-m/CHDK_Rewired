@@ -298,10 +298,12 @@ static int bt_rewrite(const char *path, const char *text, int len)
 
 // Written into the picture as Canon writes it, not afterwards.
 //
-// **What this replaces, and why.** The tag is a JPEG comment segment that goes
-// directly after the SOI, at the very front of the file. A filesystem cannot
-// insert into the middle of a file - only overwrite or append - so putting ~500
-// bytes at the front used to mean writing a whole new copy of the picture:
+// **What this replaces, and why.** The tag is a JPEG comment segment. On the
+// bodies that rewrite the file it goes directly after the SOI, at the very
+// front; here it is appended after the EOI instead, for the reason set out in
+// fwt_close(). Either way a filesystem cannot insert into the middle of a file
+// - only overwrite or append - so putting ~500 bytes at the front used to mean
+// writing a whole new copy of the picture:
 // 13.6MB of I/O and 1734 calls through Canon's FIO for a 6.8MB frame, several
 // seconds, scaling with picture size. Worse, it ran in spytask, which is the
 // task that draws, so it also cost the overlay for its duration; and being
@@ -314,13 +316,15 @@ static int bt_rewrite(const char *path, const char *text, int len)
 // and the tag is in the file Canon is already writing - one extra write of a
 // few hundred bytes, once, and nothing else changes.
 //
-// Two properties of this firmware make it safe, and both were checked:
-//   - a COM inserted *before* the Exif APP1 does not disturb Exif, whose
-//     internal offsets are relative to its own segment. That was already true
-//     of the rewrite this replaces.
-//   - neither CAM_FILEWRITETASK_SEEKS nor CAM_FILEWRITETASK_MULTIPASS is set
-//     here, so Canon writes the file straight through and never seeks back to
-//     patch a header at an offset our inserted bytes would have moved.
+// One property of this firmware makes it safe, and it was checked: neither
+// CAM_FILEWRITETASK_SEEKS nor CAM_FILEWRITETASK_MULTIPASS is set here, so Canon
+// writes the file straight through and never seeks back to patch a header at an
+// offset our appended bytes would have moved.
+//
+// What was *not* safe was doing this at the front of the file. It parsed
+// correctly - the file on the card was valid and opened normally after a power
+// cycle - but see fwt_close(): the picture is longer than Canon recorded, and
+// only bytes past the EOI can be lost to that without breaking playback.
 //
 // Guards, because this is the photograph: inject only when a tag is pending,
 // only into the file whose name we queued, only on that file's first chunk, and
@@ -446,6 +450,80 @@ int bend_tag_read(const char *picture,
                   bendx_chain_t *c, int *bendx_on,
                   bend_segs_t *s)
 {
+#ifdef CAM_BEND_TAG_INJECT
+    unsigned char rec[BEND_SHOT_REC_MAX];
+    char *text, *mark;
+    long size;
+    int fd, seg, n, i, at, ok = 0;
+
+    if (!picture) return 0;
+
+    fd = open(picture, O_RDONLY, 0777);
+    if (fd < 0) return 0;
+
+    // The tag is appended past the EOI rather than inserted after the SOI - see
+    // fwt_close() in platform/generic/filewrite.c for why - so it is read from
+    // the tail. One read of at most a kilobyte, not a scan of the file: the tag
+    // is the last thing written, so it is inside the last segment-sized window
+    // or it is not there at all.
+    size = lseek(fd, 0, SEEK_END);
+    seg  = BT_TEXT_MAX + 4;
+    if (size < (long)seg) seg = (int)size;
+    if (seg < (int)sizeof(BEND_TAG_MARK) ||
+        lseek(fd, size - seg, SEEK_SET) < 0)
+    {
+        close(fd);
+        return 0;
+    }
+
+    text = malloc(seg + 1);
+    if (!text) { close(fd); return 0; }
+    n = read(fd, text, seg);
+    close(fd);
+
+    if (n == seg)
+    {
+        // Terminated here so that everything from the mark onwards - which is
+        // our own text, since nothing follows it in the file - can be treated
+        // as a string. The bytes before it are image data and are only ever
+        // compared, never scanned as one.
+        text[seg] = 0;
+        mark = 0;
+        for (i = 0; i + (int)sizeof(BEND_TAG_MARK) - 1 <= seg; i++)
+            if (strncmp(text + i, BEND_TAG_MARK,
+                        sizeof(BEND_TAG_MARK) - 1) == 0)
+            {
+                mark = text + i;
+                break;
+            }
+        if (mark)
+        {
+            // The machine half, which is the only part read back - the lines
+            // above it are prose and the record is the truth.
+            char *p = strstr(mark, "BSH1:");
+            if (p)
+            {
+                p += 5;
+                for (at = 0; at < (int)sizeof(rec); at++)
+                {
+                    int hi = bt_unhex(p[at * 2]);
+                    int lo = (hi >= 0) ? bt_unhex(p[at * 2 + 1]) : -1;
+                    if (lo < 0) break;
+                    rec[at] = (unsigned char)((hi << 4) | lo);
+                }
+                ok = bend_shot_unpack(rec, at, b, bend_on, c, bendx_on, s);
+            }
+        }
+    }
+    free(text);
+    (void)i;
+    return ok;
+#else
+    // Bodies without the write-path hook still rewrite the file to put the
+    // comment after the SOI (bt_rewrite above), which is where a JPEG comment
+    // belongs and where this reads it. Only the segment we write ourselves, in
+    // the position we write it: a scan of the whole header for any comment
+    // would also find Canon's.
     unsigned char head[4];
     unsigned char rec[BEND_SHOT_REC_MAX];
     char *text;
@@ -456,10 +534,6 @@ int bend_tag_read(const char *picture,
     fd = open(picture, O_RDONLY, 0777);
     if (fd < 0) return 0;
 
-    // Only the segment we write ourselves, in the position we write it. A scan
-    // of the whole header for any comment would also find Canon's, and a scan
-    // of the whole file would read megabytes off the card to answer a question
-    // about its first few hundred bytes.
     if (read(fd, head, 2) != 2 || head[0] != 0xff || head[1] != 0xd8 ||
         read(fd, head, 2) != 2 || head[0] != 0xff || head[1] != 0xfe ||
         read(fd, head, 2) != 2)
@@ -482,8 +556,6 @@ int bend_tag_read(const char *picture,
         text[seg] = 0;
         if (strncmp(text, BEND_TAG_MARK, sizeof(BEND_TAG_MARK) - 1) == 0)
         {
-            // The machine half, which is the only part read back - the lines
-            // above it are prose and the record is the truth.
             char *p = strstr(text, "BSH1:");
             if (p)
             {
@@ -502,4 +574,5 @@ int bend_tag_read(const char *picture,
     free(text);
     (void)i;
     return ok;
+#endif
 }

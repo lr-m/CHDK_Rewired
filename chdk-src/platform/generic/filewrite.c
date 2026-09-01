@@ -224,34 +224,8 @@ int fwt_open(const char *name, int flags, int mode) {
 
 int fwt_write(int fd, const void *buffer, long nbytes) {
     if (!current_write_ignored) {
-        // Slip the bend recipe in as the picture is written, rather than
-        // rewriting the whole file afterwards to put it at the front. See the
-        // long note in core/bend_tag.c. Returns NULL unless a tag is pending
-        // for exactly this file and this is its first chunk.
-#ifdef CAM_BEND_TAG_INJECT
-        {
-            const unsigned char *p = (const unsigned char *)buffer;
-            if (nbytes >= 2 && p[0] == 0xff && p[1] == 0xd8) {
-                const unsigned char *hdr = 0; int hdrlen = 0;
-                const char *txt = 0;          int txtlen = 0;
-                if (bend_tag_segment(&hdr, &hdrlen, &txt, &txtlen)) {
-                    // SOI, our comment header, its text, then the rest of
-                    // Canon's chunk. Canon is told it wrote what it asked to
-                    // write; the file is simply longer, which is what inserting
-                    // bytes means.
-                    if (_Write(fd, p, 2) == 2 &&
-                        _Write(fd, hdr, hdrlen) == hdrlen &&
-                        _Write(fd, txt, txtlen) == txtlen) {
-                        bend_tag_segment_written();
-                        _Write(fd, p + 2, nbytes - 2);
-                        return (int)nbytes;
-                    }
-                    // Partial header write - fall through and let Canon's own
-                    // write run. The picture matters more than the tag.
-                }
-            }
-        }
-#endif
+        // The bend recipe is appended once Canon has written its last chunk,
+        // not spliced in here - see fwt_close() below.
         return _Write(fd, buffer, nbytes);
     }
     fwt_bytes_written += nbytes;
@@ -269,7 +243,46 @@ int fwt_lseek(int fd, long offset, int whence) {
 
 int fwt_close (int fd) {
     if (!filewrite_file_complete()) {
-        int ret = _Close(fd);
+        int ret;
+#ifdef CAM_BEND_TAG_INJECT
+        // The bend recipe, appended after Canon's last byte.
+        //
+        // It used to go in at the front, directly after the SOI, which is where
+        // a JPEG comment belongs and where the reader looked for it. The file
+        // that reached the card was correct - valid segment lengths, one EOI at
+        // EOF, and it opens fine in playback after a power cycle. Straight after
+        // the shot it did not: the gallery said "Unidentified Image" and drew
+        // only the thumbnail.
+        //
+        // The cause is that inserting bytes here means writing more of them than
+        // Canon asked us to write, and fwt_write() has to report back the count
+        // Canon expects or the save fails. So Canon's own record of the file is
+        // short by the length of the tag, and playback reads the picture through
+        // that record: it stops before the EOI and gives up, while the Exif
+        // thumbnail near the front is well inside the short read and still
+        // draws. A power cycle rebuilds the record from the directory entry on
+        // disk, which FIO wrote correctly at close, and the picture opens.
+        //
+        // Appending makes that harmless by construction. A reader that stops at
+        // Canon's remembered length gets the original picture, SOI to EOI, with
+        // nothing missing; the tag lives past the end where a short read simply
+        // does not reach it. bend_tag_read() finds it by scanning back from EOF,
+        // so recall is unaffected.
+        {
+            const unsigned char *hdr = 0; int hdrlen = 0;
+            const char *txt = 0;          int txtlen = 0;
+            if (bend_tag_segment(&hdr, &hdrlen, &txt, &txtlen)) {
+                if (_Write(fd, hdr, hdrlen) == hdrlen &&
+                    _Write(fd, txt, txtlen) == txtlen) {
+                    bend_tag_segment_written();
+                }
+                // A partial write leaves trailing bytes the reader will not
+                // match on, which is the same as an untagged picture. The
+                // photograph itself is already complete and closed below.
+            }
+        }
+#endif
+        ret = _Close(fd);
         //imagesavecomplete=1;
         // Canon has finished with this file and let go of it. This is the
         // signal the bend tagger needs and it is the whole reason it no longer

@@ -7,10 +7,12 @@
 // A bent frame used to be recorded in a sidecar beside its JPEG. That works
 // and it is still here, but it is a second file: copy the picture out of DCIM
 // on its own and the record of what made it stays behind on the card. So the
-// same record now goes *into* the picture, as a JPEG comment segment right
-// after the SOI marker:
+// same record now goes *into* the picture, as a JPEG comment segment:
 //
 //   FFD8              start of image
+//   FFE1 ...          Canon's EXIF, untouched
+//   ...               the picture
+//   FFD9              end of image
 //   FFFE <len>        comment
 //     @rewired_optics
 //     bend 9:d0 8:d8 7:~d7 6:NZ 5:d5 4:LO ...
@@ -18,7 +20,14 @@
 //     seg quarters  1:BEND07 2:bent 3:- 4:-
 //     x bit slip 11 > row addr 3
 //     BSH1:<hex>     the exact bytes a sidecar holds
-//   FFE1 ...          Canon's EXIF, untouched
+//
+// Where it sits depends on how it got there. A body with the write-path hook
+// (CAM_BEND_TAG_INJECT) appends it past the EOI, as above; a body that rewrites
+// the file afterwards puts it between the SOI and the EXIF, which is the more
+// conventional place for a comment. Past the EOI is the safer of the two on the
+// hook path and the reason is in fwt_close(): the tag makes the file longer
+// than Canon believes it wrote, and only bytes after the EOI can be missed by a
+// short read without costing the picture. Both are found by bend_tag_read().
 //
 // Two readerships, one segment. Everything above the last line is for a person
 // - it shows up in any tool that displays a JPEG comment, and `strings` finds

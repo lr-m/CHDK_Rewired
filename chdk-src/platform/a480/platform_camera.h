@@ -100,6 +100,41 @@
     // every redraw pass and samples on its own timers, so Canon repainting over
     // it here costs the same as it costs the stock OSD, which is to say the
     // CAM_OSD_REDRAW_MASK gap above and nothing more.
+    // This body installs CHDK's replacement file-write task (see boot.c) and is
+    // DryOS, so fwt_write() sees Canon's writes and the bend recipe goes into
+    // the picture as it is written rather than by rewriting it afterwards.
+    // "A review is on screen", reversed out of this ROM. CHDK's recreview_hold
+    // is unusable here: stubs_min.S carries 0xFFC00414 marked "not found",
+    // which is a ROM address holding a constant 0, so the review gate has been
+    // permanently open since this port was made - which is why the overlay drew
+    // on top of the reviewed photograph in normal shooting mode.
+    //
+    // 0x2f4c is the ShootCon state flag: struct base 0x2ed8 (from the literal
+    // at 0xffc5d0e4) + 0x74. Set to 1 in ShtCon_StartReview beside the
+    // _EntryActionReview log, cleared to 0 in _ExitActionReview.
+    //
+    // Note the offset differs from the A470's +0x70 - the struct layout is not
+    // the same between the two, so the address does not transfer. What does
+    // transfer is the mistake: finsig finds +0x88 on both bodies (0x2f60 here,
+    // which stubs_entry.S carries commented out; 0x5b64 on the A470) and that
+    // field is the review *hold* flag, not this one.
+    //
+    // Firmware-specific. This number is for 100b and nothing else.
+    // 0x2f4c is set and cleared by ShtCon_StartReview / _ExitActionReview but
+    // reads 0 when it matters on the body, so the derivation is wrong somewhere
+    // and the hold cannot rely on it yet. Left in place, unused in practice,
+    // until it is re-derived - see STATUS.md.
+    #define CAM_REVIEW_ACTIVE_FLAG          0x2f4c
+
+    // ...and until then, hold the plates down for the whole shot rather than on
+    // a 2500ms clock. Needed because raw_service_ui() repaints during capture:
+    // without this the overlay is painted back mid-bend and ends up frozen into
+    // Canon's review. The A470 does not set this and must not - there the hold
+    // tracks the real review flag and the overlay stays live during the write.
+    #define CAM_PERSISTENT_OSD_HOLD_THROUGH_PROCESSING 1
+
+    #define CAM_BEND_TAG_INJECT             1
+
     #define CAM_PERSISTENT_OSD              1
 
     // Readout colours come from the selected theme. The old per-boot shuffle
@@ -157,7 +192,7 @@
     //
     // The forwarding code is still in platform/a480/kbd.c under the #ifdef.
 
-    // Date/time prompt suppression, traced in the A480 firmware:
+    // Date/time prompt suppression, traced in PRIMARY_a480.BIN:
     //
     //   FUN_ffc2ad38 returns *(0x210c + 0x10), the RTC-valid flag.
     //   FUN_ffc184a0, FUN_ffc580ec and FUN_ffc5b588 all gate the

@@ -166,6 +166,16 @@ void raw_closefile(int fd)
 
 // Set in raw_process and used in get_raw_pixel & set_raw_pixel (for performance)
 // Don't call set/get_raw_pixel until this value is initialised
+// Which phase of raw_process() is running, for the on-screen gate readout.
+// 0 idle, 1 bitbend, 2 bendx, 3 mexp, 4 bend_shot, 5 savefile, 6 past the bend
+// engine and into Canon's own work.
+//
+// This exists because "where do the 14 seconds go" has now been guessed wrong
+// three times - the redraw gate, the review flag, the experimental chain - and
+// each guess cost a card write and a shot on the body. The whole question is
+// answered by two numbers on a line that is already being drawn.
+int raw_stage;
+
 static char *rawadr;    // Pointer to current raw image buffer
 
 // handle actual raw / dng saving to SD
@@ -298,8 +308,12 @@ void raw_process(void)
     // In composite-only mode the intermediate JPEGs are deliberately clean,
     // so do not attach a bend recipe claiming an effect was applied to them.
     if (bend_each || composite_done)
+    {
+        raw_stage = 4;
         raw_bend_shot();
+    }
 
+    raw_stage = 6;              // out of the bend engine; Canon's work from here
     shooting_bracketing();
 
     if (conf.tv_bracket_value || conf.av_bracket_value || conf.iso_bracket_value || conf.subj_dist_bracket_value)
@@ -324,6 +338,7 @@ void raw_process(void)
 
         if (conf.save_raw && is_raw_enabled())
         {
+            raw_stage = 5;
             raw_savefile(rawadr,altrawadr);
         }
     }
@@ -332,6 +347,7 @@ void raw_process(void)
     if (conf.curve_enable)
         libcurves->curve_apply();
 #endif
+    raw_stage = 0;              // raw_process() done; spytask is free again
 }
 
 //-------------------------------------------------------------------
@@ -439,8 +455,29 @@ unsigned short get_raw_pixel(unsigned int x,unsigned  int y) {
 #define BB_LUT_SIZE     (1 << BB_NBITS)
 #define BB_MAX          (BB_LUT_SIZE - 1)
 
-static unsigned short bb_lut[BB_LUT_SIZE];
+// The compiled data-pin mapping, one entry per possible sensor value.
+//
+// Allocated on first use rather than reserved statically. At 12 bits per pixel
+// that is 4096 entries of unsigned short = 8192 bytes, and it used to sit in
+// .bss permanently even with bending switched off. On the A480 that mattered:
+// CHDK is loaded into AgentRAM there, the whole region is 204800 bytes, and the
+// core had grown to within 480 bytes of it - which left no room for the custom
+// boot screen and silently broke it (see include/boot_screen.h and
+// loader/a480/main.c). Handing this table to the heap gives that space back.
+//
+// bb_run() allocates it before bend_compile() and skips bending entirely if the
+// allocation fails, so the failure mode is an unbent frame rather than a frame
+// bent through a null pointer. It is kept for the life of the boot once taken -
+// this is not a per-shot allocation.
+static unsigned short *bb_lut;
 static bend_cc_t      bb_cc;
+
+static int bb_lut_ready(void)
+{
+    if (!bb_lut)
+        bb_lut = (unsigned short *)malloc(BB_LUT_SIZE * sizeof(*bb_lut));
+    return bb_lut != 0;
+}
 
 // Optical black column for BUS_OB. This camera reads 3152 pixels per row but
 // its active area starts at x=12, so columns 0..11 are physically masked
@@ -544,12 +581,78 @@ static void bb_row_fast(unsigned char *p, unsigned int rowpix)
 // what an unsegmented bend costs; a vertical one or a circle drops every row
 // it cuts onto the unpack-and-repack loop, the same one a bus-fed bend uses.
 
+// Repaint the persistent overlay from inside the long capture loops.
+//
+// raw_process() runs the whole bend engine, and it runs *in spytask*. Spytask's
+// own call to gui_redraw() is what puts the overlay back after a shot - but the
+// branch that calls raw_process() ends in `continue`, so that redraw is skipped
+// for the entire duration of the work. The overlay therefore stayed off screen
+// for exactly as long as bending took, which is why a heavier effect chain made
+// the wait longer: the delay was the bend itself, not a timer and not Canon's
+// review.
+//
+// This is the ordinary redraw, made from inside the work instead of after it.
+// Same task and same context as normal, so nothing about the drawing changes -
+// and every ownership gate still applies, so nothing is painted while Canon's
+// review owns the screen. Throttled to ~10Hz, which is invisible against the
+// per-pixel loops it sits in.
+//
+// mode_get() has to come with it, and leaving it out is what made this whole
+// mechanism a no-op. gui_redraw() paints the persistent overlay only if
+// posd_screen_active() agrees, and two of that function's terms - mode_rec and
+// mode_play - are not read from Canon when they are tested. They are cached in
+// camera_info.state, and the only thing that refreshes them is mode_get() at
+// the *top of the spytask loop* - the one place raw_process() guarantees is not
+// reached, because the branch that calls it ends in `continue`.
+//
+// So for the whole of a bend those two terms hold whatever they were when
+// capture started, which is not the live record screen, so the overlay was
+// gated off for exactly as long as the work took and came back the moment
+// spytask got back to the loop head. Measured on the A470 at 14s for a 14s
+// bend. Every previous attempt at this - the redraw gate in core/main.c, the
+// review-flag level test, the timeout, the falling edge - was aimed at a gate
+// that was not the one holding it shut, which is why none of them moved it.
+//
+// This is the same call the loop head makes, in the same task, at a tenth of
+// the rate.
+#define RAW_UI_SERVICE_MS 100
+
+static int raw_ui_last;
+
+static void raw_service_ui(void)
+{
+#ifndef CAM_POSD_SERVICE_UI_IN_CAPTURE
+    // Off unless the port asks for it - see camera.h. Repainting during capture
+    // puts the overlay back on a screen Canon is about to freeze for the review
+    // on any body whose hold cannot track the real review.
+    return;
+#else
+    extern void gui_redraw(void);
+    extern int  mode_get(void);
+    int t = get_tick_count();
+    if (raw_ui_last && (unsigned)(t - raw_ui_last) < RAW_UI_SERVICE_MS) return;
+    raw_ui_last = t;
+    mode_get();
+    gui_redraw();
+#ifdef CAM_POSD_GATE_DEBUG
+    // Drawn from here as well as from spytask. spytask does not reach its own
+    // call to this for the whole of raw_process(), so without this the readout
+    // is frozen during exactly the stall it is meant to explain - and a frozen
+    // line is indistinguishable from a line reporting nothing has changed.
+    { extern void posd_gate_debug_draw(void); posd_gate_debug_draw(); }
+#endif
+#endif // CAM_POSD_SERVICE_UI_IN_CAPTURE
+}
+
 static void bb_run(bend_t *b, int layout, int size, int seg)
 {
     unsigned int x, y;
     unsigned int w = camera_sensor.raw_rowpix;
     unsigned int h = camera_sensor.raw_rows;
     int period, chan;
+
+    // No table, no bend. Checked before anything is written to the frame.
+    if (!bb_lut_ready()) return;
 
     bend_sanitize(b, BB_NBITS);
     // Held to the pure sources before compiling rather than filtered after,
@@ -573,6 +676,9 @@ static void bb_run(bend_t *b, int layout, int size, int seg)
         int nsp, i, mine = 0;
 
         if (period > 1 && (y % period) != 0) continue;
+
+        // Keep the UI alive through the bend - see raw_service_ui().
+        if ((y & 0x3f) == 0) raw_service_ui();
 
         nsp = bend_seg_spans(layout, size, (int)y, (int)w, (int)h, segs, xend);
         for (i = 0; i < nsp; i++) if (segs[i] == seg) { mine = 1; break; }
@@ -677,6 +783,7 @@ void raw_bitbend(void)
     int layout, size, i, n;
 
     if (!conf.bitbend_enable) return;
+    raw_stage = 1;
 
     // The same gate the UI uses, applied here as well because a config block
     // restored from a card is not required to have been through the UI at all.
@@ -703,7 +810,10 @@ void raw_bitbend(void)
     // in bb_run(), and is why this is a plain forward loop rather than
     // something that tries to be clever about which region is on top.
     for (i = 0; i < n; i++)
+    {
+        raw_service_ui();
         bb_run(bend_seg_conf(i), layout, size, i);
+    }
     finished();
 }
 
@@ -744,6 +854,7 @@ void raw_bendx(void)
     int i, n;
 
     if (!conf.bendx_enable) return;
+    raw_stage = 2;
 
     bendx_chain_sanitize(c);
     n = bendx_chain_count(c);
@@ -782,11 +893,31 @@ void raw_bendx(void)
     if (!scratch) return;
 
     started();
+
+    // Service the overlay from inside each profile's row loop as well as
+    // between profiles - one pass over the sensor is seconds of work on these
+    // bodies and there was no service point anywhere inside it.
+    bendx_set_service(raw_service_ui);
+
     // In order, each one working on what the last one left. That is what makes
     // a chain worth having rather than being N separate effects averaged: a
     // stuck address line under a decaying refresh is not either of them.
+    //
+    // The braces are load-bearing and were missing. Without them the loop body
+    // was raw_service_ui() alone, bendx_apply() ran once after the loop with
+    // i == n, and so:
+    //   - a chain of N profiles applied exactly one profile, never the chain;
+    //   - that one was item[n], the *live* slot being edited rather than any
+    //     locked member - and at a full chain, n == BENDX_CHAIN_MAX, so it was
+    //     item[4] of a [4] array, reading past the end of the struct;
+    //   - the frame pass ran with no service call inside it at all.
     for (i = 0; i < n; i++)
+    {
+        raw_service_ui();
         bendx_apply(&c->item[i], &buf, &env, scratch);
+    }
+
+    bendx_set_service(0);
     finished();
 
     free(scratch);
@@ -882,6 +1013,10 @@ static int mexp_combine(int mode, unsigned n)
     for (j = 0; j < camera_sensor.raw_rows; j++)
     {
         unsigned char *live = (unsigned char*)rawadr + j * rowlen;
+
+        // Reading the accumulator off the card a row at a time is the slowest
+        // thing in the capture path, so service the UI here too.
+        if ((j & 0x3f) == 0) raw_service_ui();
 
         if (read(fd, frow, rowlen) != (int)rowlen) { ok = 0; break; }
 

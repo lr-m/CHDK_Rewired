@@ -168,6 +168,97 @@
     // happen *before* the review does - see posd_hide_now() in core/gui.c.
     #define CAM_PERSISTENT_OSD_SHOT_HIDE_MS 2500
 
+    // Keep calling gui_redraw() while Canon is still processing a shot. Canon's
+    // visible review ends before its JPEG/card work does, and the spytask gate
+    // in core/main.c otherwise skips every redraw until that work finishes -
+    // stranding the persistent overlay for as long as the save takes. Define on
+    // any body with CAM_PERSISTENT_OSD whose overlay comes back late after a
+    // shot, in proportion to how long the picture took to write.
+    // Diagnostic: draw the overlay/grid gate values from spytask. See
+    // posd_gate_debug_draw() in core/gui.c.
+    #undef  CAM_POSD_GATE_DEBUG
+
+    #undef  CAM_PERSISTENT_OSD_REDRAW_WHILE_PROCESSING
+
+    // Call vid_bitmap_refresh() ourselves while a shot is being processed, for a
+    // body where Canon's repaint is what carries the bitmap to the panel and
+    // CAM_HOLD_SCREEN_LOCK_IN_REC is holding that repaint off. Without it
+    // everything CHDK draws during the save - overlay, grid, warnings - sits in
+    // a buffer nothing scans out until Canon refreshes of its own accord.
+    // Consumed in core/main.c.
+    #undef  CAM_POSD_PUSH_SCREEN_WHILE_PROCESSING
+
+    // Write the bend recipe into the JPEG as Canon writes it, from fwt_write(),
+    // instead of rewriting the finished file to insert it at the front. Needs
+    // BOTH: DryOS (fwt_write is inside #ifdef CAM_DRYOS in
+    // platform/generic/filewrite.c) and boot.c actually installing CHDK's
+    // replacement file-write task. Check both before defining it on a new port -
+    // if fwt_write never runs, nothing is written and nothing says so.
+    // See core/bend_tag.c.
+    #undef  CAM_BEND_TAG_INJECT
+
+    // Keep the persistent overlay down for the whole of the shot, not just for
+    // CAM_PERSISTENT_OSD_SHOT_HIDE_MS. Consumed by posd_shot_hold().
+    //
+    // For a body that has no working "a review is on screen" flag. The plates
+    // are erased before the shot and normally stay erased because nothing
+    // repaints them - but raw_service_ui() in core/raw.c now calls gui_redraw()
+    // from inside the bend loops every 100ms, so once the hide timer expires
+    // they are painted back mid-capture and Canon then freezes the bitmap for
+    // the review with them in it.
+    //
+    // On a body with a real review flag (CAM_REVIEW_ACTIVE_FLAG) this is not
+    // needed and should not be set: there the hold tracks the review itself,
+    // and holding through processing as well would put the overlay back on the
+    // wrong side of the fix it took all of 2026-08-31 to find - the whole point
+    // there is that the overlay stays live while the picture is being written.
+    #undef  CAM_PERSISTENT_OSD_HOLD_THROUGH_PROCESSING
+
+    // Let raw_service_ui() in core/raw.c repaint the screen from inside the
+    // capture loops. OFF by default, and that default is the important part.
+    //
+    // It exists for one body: the A470, where the overlay was stranded for the
+    // whole of a long bend because spytask is inside raw_process() and never
+    // reaches its own gui_redraw(). It only works there because that port has a
+    // real review flag, so the repaints paint nothing until Canon's review is
+    // over.
+    //
+    // Anywhere else it is actively harmful: the plates are erased before the
+    // shot and stay erased precisely because nothing repaints them, so turning
+    // repaints on puts them back mid-capture and Canon then freezes the bitmap
+    // for the review with the overlay on it. That is exactly what it did to the
+    // A480, and the working build in CHDK_Rewired/ differs from this tree by
+    // not having the function at all.
+    #undef  CAM_POSD_SERVICE_UI_IN_CAPTURE
+
+    // Bring the overlay back on the falling edge of Canon's review flag rather
+    // than on the CAM_PERSISTENT_OSD_SHOT_HIDE_MS timer. Consumed by
+    // posd_shot_hold() in core/gui.c.
+    //
+    // Neither of the two signals available is the one wanted on its own.
+    // recreview_hold stays asserted into the JPEG/card tail, so gating on its
+    // *level* holds the overlay down for the whole save - which is the delay
+    // that grows with how heavy the bend was. The hide timeout does not know
+    // how long the review is and so either cuts into it or overshoots it.
+    // The *falling edge* of the flag is the event that actually matters: the
+    // picture has left the screen. So the timeout owns the minimum hold and
+    // the edge owns the release, and the two are used for what each is.
+    //
+    // Pairs with CAM_PERSISTENT_OSD_TIMEOUT_OWNS_REVIEW: with the edge tracked
+    // here the plates are already held for the whole review, so keeping the
+    // level test in posd_review_blocks() as well only adds the tail back.
+    #undef  CAM_PERSISTENT_OSD_TRACK_REVIEW_EDGE
+
+    // Backstop for the wait above, in ms from the shutter. Only reached if
+    // recreview_hold never falls - a wrong stub address, or a review the user
+    // is holding open. Releasing late is a cosmetic fault; never releasing is
+    // an overlay that is gone until the next shot.
+    #define CAM_PERSISTENT_OSD_REVIEW_MAX_MS 30000
+
+    // Canon's review replaces the bitmap itself on this body, so CHDK must not
+    // also erase before the review. Consumed in core/gui.c.
+    #undef  CAM_PERSISTENT_OSD_CANON_REVIEW_OWNS_ERASE
+
     // How often spytask calls gui_redraw(), as a mask over its loop counter: the
     // loop ticks every 20ms, so 3 redraws every 4th pass (80ms), 1 every 2nd pass
     // (40ms), 0 every pass (20ms). Must be 2^n-1.

@@ -176,6 +176,11 @@ void bendx_chain_sanitize(bendx_chain_t *c);
 // if it is not Off. This is what the UI counts and what raw.c walks.
 int  bendx_chain_count(const bendx_chain_t *c);
 
+// Called from inside each profile's row loop, every 64 rows, so a long pass
+// does not hold the display task for its whole duration. Null by default; the
+// host self-tests never set it. See bx_service in core/bendx.c.
+void bendx_set_service(void (*fn)(void));
+
 // The slot the rocker turns, or null when every slot is locked.
 bendx_t       *bendx_chain_live(bendx_chain_t *c);
 const bendx_t *bendx_chain_live_const(const bendx_chain_t *c);

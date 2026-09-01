@@ -88,6 +88,16 @@
     #undef  CAM_OSD_REDRAW_MASK
     #define CAM_OSD_REDRAW_MASK             1   // 40ms instead of 80ms - halves the
                                                 // visible gap after a Canon repaint
+    // This body installs CHDK's replacement file-write task (see boot.c) and is
+    // DryOS, so fwt_write() sees Canon's writes and the bend recipe goes into
+    // the picture as it is written rather than by rewriting it afterwards.
+    // Keep the overlay serviced from inside the capture loops. Only safe here
+    // because this port has a working review flag, so the repaints paint
+    // nothing until Canon's review has finished. See camera.h.
+    #define CAM_POSD_SERVICE_UI_IN_CAPTURE  1
+
+    #define CAM_BEND_TAG_INJECT             1
+
     #define CAM_PERSISTENT_OSD              1   // splash-style overlay - see camera.h
     // OFF - calling SetDate this early in spytask crashes the camera right after
     // the boot screen. The signature is right (verified against its own range
@@ -117,6 +127,15 @@
     // this that a body still has to confirm - which slot is which.
     #define CAM_CUSTOM_SOUNDS               1
 
+    // The boot screen is now a marker-tagged slot in the core image rather than
+    // a fixed array (sub/102c/boot_image.h, tools/mkbootslot.py), so the
+    // on-camera importer can rewrite it inside DISKBOOT.BIN. This is what puts
+    // "Boot screen -> Import JPG/PNG" in CHDK Settings, as on the A480.
+    //
+    // Inside the 102c gate because only that revision has the dump, and so only
+    // that revision has the startup-image hook the slot feeds.
+    #define CAM_CUSTOM_BOOT_IMAGE           1
+
     // Preserve the ownership model of the archived, hardware-tested A470 OSD:
     // Canon's review replaces the bitmap itself. The pre-shot wipe, review flag
     // gate and per-overlay screen lock were later A480 fixes and cause the A470
@@ -124,12 +143,53 @@
     #define CAM_PERSISTENT_OSD_CANON_REVIEW_OWNS_ERASE 1
     #define CAM_PERSISTENT_OSD_TIMEOUT_OWNS_REVIEW 1
 
+    // "A review is on screen", reversed out of this ROM because CHDK's
+    // recreview_hold is not that on this firmware. 0x5b64 - the address finsig
+    // labels recreview_hold - is written twice in the whole image:
+    // ShtCon_StartReview clears it to 0, and ShootCon_NotifyStartReviewHold
+    // (FUN_ffc6432c, the function finsig found it in) sets it to 1. It is the
+    // review *hold* flag, 0 for an ordinary review and 1 only while the shutter
+    // holds one up, and not cleared again until NotifyCompleteReviewHold at the
+    // end of the sequence.
+    //
+    // 0x5b4c is the state flag: ShootCon struct (base 0x5adc, from the literals
+    // at 0xffc62640 / 0xffc638a4 / 0xffc648f0) + 0x70. Set to 1 in
+    // ShtCon_StartReview beside the _EntryActionReview log, cleared to 0 in
+    // _ExitActionReview (FUN_ffc62828), and read as a state guard by five other
+    // functions.
+    //
+    // Firmware-specific. This number is for 102c and nothing else.
+    #define CAM_REVIEW_ACTIVE_FLAG          0x5b4c
+
+    // ...and with the level test gone, the *edge* is what holds the plates off
+    // the review. TIMEOUT_OWNS_REVIEW on its own left nothing but the 2500ms
+    // hide timer between the shutter and the plates, which is why the overlay
+    // started being drawn on top of the reviewed photograph. The two belong
+    // together: the timeout is the floor, the edge is the release.
+    #define CAM_PERSISTENT_OSD_TRACK_REVIEW_EDGE 1
+
     // The visible review ends before JPEG/card processing does (the orange LED
     // continues flashing). Normally spytask stops calling gui_redraw() during
     // that processing tail, which strands the cleared overlay until it ends.
     // Keep servicing the persistent UI; its own review/menu/shutter gates still
     // decide whether anything is allowed to be painted.
     #define CAM_PERSISTENT_OSD_REDRAW_WHILE_PROCESSING 1
+
+    // NOT enabled: CAM_POSD_PUSH_SCREEN_WHILE_PROCESSING. It was added for a
+    // theory that turned out to be wrong - that the overlay was being drawn and
+    // not reaching the panel - and the real cause was bend_tag_service()
+    // blocking spytask so that nothing was drawn at all. Left out rather than
+    // left on: it calls RefreshPhysicalScreen at 5Hz through every save to fix
+    // a fault that does not exist. The define and its implementation in
+    // core/main.c remain, for a body that genuinely needs the push.
+
+    // The on-screen gate readout, off now that the post-shot stall is understood
+    // (bend_tag_service() blocking spytask inside Canon's JPEG write - see
+    // STATUS.md). The code stays in core/gui.c and core/raw.c: its L and Z
+    // columns are what finally distinguished "spytask is not painting" from
+    // "spytask is not running", and the a430 and a410 faults are still open.
+    // Define it again on whichever body is being chased.
+    // #define CAM_POSD_GATE_DEBUG          1
 
     // Startup is replaced in the early StartupImage task, before Canon plays
     // entry 1. Do not enable the later generic CHDK beep as well.

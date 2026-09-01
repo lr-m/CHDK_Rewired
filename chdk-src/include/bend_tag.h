@@ -58,6 +58,19 @@ void bend_tag_queue(const char *dir, long num,
 // its JPEG is finished, so it is safe on every pass.
 void bend_tag_service(void);
 
+// Called from CHDK's replacement file-write task (platform/generic/filewrite.c)
+// in Canon's own task context: the first as Canon opens a file, the second when
+// it closes one. Together they are how the tagger knows the picture is finished
+// without opening it to find out. A copy and a compare - no allocation, no I/O.
+void bend_tag_note_file_open(const char *name);
+void bend_tag_note_file_closed(void);
+
+// The comment segment to insert after the SOI as Canon writes the picture, or
+// NULL if there is nothing to insert into this file. See core/bend_tag.c.
+int bend_tag_segment(const unsigned char **hdr, int *hdrlen,
+                     const char **text, int *textlen);
+void bend_tag_segment_written(void);
+
 // Read a tagged picture back. Returns 1 if the comment was there and held a
 // record this build understands.
 int bend_tag_read(const char *picture,

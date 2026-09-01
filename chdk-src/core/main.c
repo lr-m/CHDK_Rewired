@@ -236,6 +236,7 @@ void core_spytask()
     for (i = 0; i < (int)(sizeof(chdk_dirs) / sizeof(char*)); i++)
         mkdir_if_not_exist(chdk_dirs[i]);
 
+
     // "Are modules installed at all" - one probe file standing in for the set.
     //
     // Upstream only asks for the uppercase name, but every actual module load
@@ -437,7 +438,40 @@ void core_spytask()
             continue;
         }
 
+#ifdef CAM_POSD_GATE_DEBUG
+        // Outside the redraw gate below, and outside every ownership test, so
+        // it keeps updating through exactly the stall it is there to explain.
+        {
+            extern void posd_gate_debug_draw(void);
+            extern unsigned posd_spy_loops;
+            posd_spy_loops++;
+            posd_gate_debug_draw();
+        }
+#endif
+
+        // Canon's *visible* review ends before its JPEG/card processing does -
+        // the orange LED keeps flashing through the tail. This gate skips the
+        // entire redraw block below, gui_redraw() included, for as long as the
+        // shot is still being processed and the review flag has already cleared.
+        //
+        // On a body with the persistent OSD that is what stranded the overlay:
+        // posd_hide_now() erases it as the shutter fires, the review comes and
+        // goes, and then nothing repaints until processing ends. The overlay
+        // therefore stayed off screen for exactly as long as the picture took to
+        // save, which is why a heavier bend or a longer effect chain made the
+        // wait longer - the delay was the encode, not a timer.
+        //
+        // CAM_PERSISTENT_OSD_REDRAW_WHILE_PROCESSING keeps the UI serviced
+        // through that tail. It only restores the redraw *call*: the overlay's
+        // own ownership gates (recreview_hold, canon_menu_active, half/full
+        // press - see posd_screen_active() in gui.c) still decide whether a
+        // single pixel is allowed to be painted, so this cannot draw over a
+        // review or a Canon menu.
+#ifdef CAM_PERSISTENT_OSD_REDRAW_WHILE_PROCESSING
+        if (1)
+#else
         if ((camera_info.state.state_shooting_progress != SHOOTING_PROGRESS_PROCESSING) || recreview_hold)
+#endif
         {
 #ifdef CAM_HOLD_SCREEN_LOCK_IN_REC
             // See CAM_HOLD_SCREEN_LOCK_IN_REC in camera.h.
@@ -472,6 +506,42 @@ void core_spytask()
                     vid_turn_on_updates();
                 }
                 lock_held = want_lock;
+            }
+#endif
+#ifdef CAM_POSD_PUSH_SCREEN_WHILE_PROCESSING
+            // Push the bitmap to the panel ourselves while Canon is developing
+            // and writing the picture.
+            //
+            // Measured on the A470: the gate readout in posd_gate_debug_draw()
+            // is drawn straight from here, outside every ownership test, and it
+            // is invisible for the whole post-shot stall - and so is everything
+            // else CHDK draws. Nothing CHDK could be *deciding* explains that;
+            // the drawing is happening and not reaching the screen.
+            //
+            // On this body Canon's repaint is what carries the bitmap to the
+            // panel, and CAM_HOLD_SCREEN_LOCK_IN_REC holds it off by setting
+            // refresh_physical_screen_blocked on every pass - deliberately,
+            // because Canon repainting its own OSD over ours is what the flicker
+            // fix was for. In live view that is fine: something refreshes often
+            // enough anyway. While the shot is being saved, nothing does, so the
+            // overlay sits in a buffer nobody scans out until Canon comes back
+            // and refreshes - which is exactly when it reappears, and exactly
+            // why the delay tracked how long the picture took to write.
+            //
+            // vid_bitmap_refresh() clears the block flag and calls
+            // RefreshPhysicalScreen itself. The lock block above re-asserts the
+            // flag on the next pass, so this borrows the screen rather than
+            // giving it back. Throttled: this is a Canon call made while Canon
+            // is busy, and it only has to beat the eye.
+            if (camera_info.state.state_shooting_progress == SHOOTING_PROGRESS_PROCESSING)
+            {
+                static int posd_push_tick;
+                int pt = get_tick_count();
+                if (!posd_push_tick || ((pt - posd_push_tick) >= 200))
+                {
+                    posd_push_tick = pt;
+                    vid_bitmap_refresh();
+                }
             }
 #endif
             if (((cnt++) & CAM_OSD_REDRAW_MASK) == 0) {

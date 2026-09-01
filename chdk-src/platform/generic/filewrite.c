@@ -1,6 +1,7 @@
 #include "stdlib.h" // for NULL
 
 #include "remotecap_core.h"
+#include "bend_tag.h"
 static int ignore_current_write=0; //used by the platform routine to check whether to write the current file
 #ifdef CAM_DRYOS
 static long fwt_bytes_written = 0; // need to track this independently of ptp
@@ -158,6 +159,15 @@ void filewrite_main_hook(fwt_data_struct *fwt_data)
 #endif // CAM_FILEWRITETASK_MULTIPASS
 
     file_chunks = &(fwt_data->pdc[0]);
+
+    // Remember which file this is, for bend_tag_note_file_closed() below. The
+    // name is only available here, at the open stage; fwt_close() is not given
+    // it. "A/DCIM/100CANON/IMG_1234.JPG" - the extension is at [24], which is
+    // what the CR2 test just below has always relied on.
+#ifdef CAM_BEND_TAG_INJECT
+    bend_tag_note_file_open(fwt_data->name);
+#endif
+
 #ifdef CAM_HAS_CANON_RAW
     // for raw enabled cameras, get format from extension
     // A/DCIM/100CANON/IMG_1234.CR2
@@ -214,6 +224,34 @@ int fwt_open(const char *name, int flags, int mode) {
 
 int fwt_write(int fd, const void *buffer, long nbytes) {
     if (!current_write_ignored) {
+        // Slip the bend recipe in as the picture is written, rather than
+        // rewriting the whole file afterwards to put it at the front. See the
+        // long note in core/bend_tag.c. Returns NULL unless a tag is pending
+        // for exactly this file and this is its first chunk.
+#ifdef CAM_BEND_TAG_INJECT
+        {
+            const unsigned char *p = (const unsigned char *)buffer;
+            if (nbytes >= 2 && p[0] == 0xff && p[1] == 0xd8) {
+                const unsigned char *hdr = 0; int hdrlen = 0;
+                const char *txt = 0;          int txtlen = 0;
+                if (bend_tag_segment(&hdr, &hdrlen, &txt, &txtlen)) {
+                    // SOI, our comment header, its text, then the rest of
+                    // Canon's chunk. Canon is told it wrote what it asked to
+                    // write; the file is simply longer, which is what inserting
+                    // bytes means.
+                    if (_Write(fd, p, 2) == 2 &&
+                        _Write(fd, hdr, hdrlen) == hdrlen &&
+                        _Write(fd, txt, txtlen) == txtlen) {
+                        bend_tag_segment_written();
+                        _Write(fd, p + 2, nbytes - 2);
+                        return (int)nbytes;
+                    }
+                    // Partial header write - fall through and let Canon's own
+                    // write run. The picture matters more than the tag.
+                }
+            }
+        }
+#endif
         return _Write(fd, buffer, nbytes);
     }
     fwt_bytes_written += nbytes;
@@ -233,6 +271,15 @@ int fwt_close (int fd) {
     if (!filewrite_file_complete()) {
         int ret = _Close(fd);
         //imagesavecomplete=1;
+        // Canon has finished with this file and let go of it. This is the
+        // signal the bend tagger needs and it is the whole reason it no longer
+        // has to poll: opening the picture before this point does not "check
+        // whether it is ready", it blocks on the lock Canon is holding, and
+        // doing that from spytask stalls everything CHDK draws for the length
+        // of the save. One store, no I/O - see core/bend_tag.c.
+#ifdef CAM_BEND_TAG_INJECT
+        bend_tag_note_file_closed();
+#endif
         fwt_bytes_written = 0;
         return ret;
     }

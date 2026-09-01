@@ -598,6 +598,29 @@ unsigned bendx_random(bendx_t *x, unsigned seed)
 // Rotate a row left by n bits, wrapping. The unit of the fault is the bit,
 // because that is what a read that started early recovers: the bytes are
 // intact and the boundaries are not.
+// Optional UI service callback, called from inside the per-row loops below.
+//
+// Each profile is one pass over the whole sensor and there was no service point
+// anywhere inside it, so an experimental chain held the display task for the
+// entire pass - measured on the A470 at ~14s, which is exactly how long the
+// persistent overlay stayed off the screen after a shot. The bend engine in
+// core/raw.c already services every 64 rows for the same reason; this gives the
+// experimental engine the same courtesy.
+//
+// Kept as a setter rather than a member of bendx_env_t so that the host
+// self-tests, which build their own env on the stack, cannot leave it holding a
+// stack value. Null until a caller sets it, which is what the self-tests get.
+static void (*bx_service)(void);
+
+void bendx_set_service(void (*fn)(void))
+{
+    bx_service = fn;
+}
+
+// Cheap enough to sit in every row loop: one test against a null pointer, and
+// the call itself only every 64th row.
+#define BX_TICK(y) do { if (bx_service && (((y) & 0x3f) == 0)) bx_service(); } while (0)
+
 static void bx_rot(unsigned char *dst, const unsigned char *src,
                    unsigned len, unsigned bits)
 {
@@ -637,6 +660,7 @@ static void bx_endian(const bendx_t *x, const bendx_buf_t *b,
 
     for (y = 0; y < b->rows; y++)
     {
+        BX_TICK(y);
         unsigned char *row = b->base + (unsigned)y * len;
         if (!bx_on(x, y)) continue;
 
@@ -695,6 +719,7 @@ static void bx_slip(const bendx_t *x, const bendx_buf_t *b,
 
     for (y = 0; y < b->rows; y++)
     {
+        BX_TICK(y);
         unsigned char *row = b->base + (unsigned)y * len;
         if (!bx_on(x, y)) continue;
         for (i = 0; i < len; i++) s0[i] = row[i];
@@ -713,6 +738,7 @@ static void bx_tear(const bendx_t *x, const bendx_buf_t *b,
 
     for (y = 0; y < b->rows; y++)
     {
+        BX_TICK(y);
         unsigned char *row = b->base + (unsigned)y * len;
         bits += per;                    // grows whether or not the row is on,
                                         // so banding cuts the tear instead of
@@ -738,6 +764,7 @@ static void bx_addr(const bendx_t *x, const bendx_buf_t *b, unsigned char *s0)
 
     for (y = 0; y < b->rows; y++)
     {
+        BX_TICK(y);
         unsigned char *ra, *rb;
         unsigned y2 = y | step;
 
@@ -773,6 +800,7 @@ static void bx_coladdr(const bendx_t *x, const bendx_buf_t *b)
 
     for (y = 0; y < b->rows; y++)
     {
+        BX_TICK(y);
         unsigned char *row = b->base + (unsigned)y * len;
         if (!bx_on(x, y)) continue;
 
@@ -816,6 +844,7 @@ static void bx_stride(const bendx_t *x, const bendx_buf_t *b, unsigned char *s0)
 
     for (y = 0; y < b->rows; y++)
     {
+        BX_TICK(y);
         unsigned char *row = b->base + (unsigned)y * len;
         // y * (len + d) cannot overflow 32 bits: the largest sensor here is
         // 2772 rows of 5580 bytes and d tops out at 1024.
@@ -851,6 +880,7 @@ static void bx_refresh(const bendx_t *x, const bendx_buf_t *b)
 
     for (y = 0; y < b->rows; y++)
     {
+        BX_TICK(y);
         unsigned char *row = b->base + (unsigned)y * len;
         unsigned st = xs32(x->seed ^ (y * 0x9e3779b9u));
         // 0 at the top of the frame, sev/16 of all cells by the bottom.
@@ -887,6 +917,7 @@ static void bx_echo(const bendx_t *x, const bendx_buf_t *b,
 
     for (y = 0; y < b->rows; y++)
     {
+        BX_TICK(y);
         unsigned char *row = b->base + (unsigned)y * len;
         unsigned char *t;
 
@@ -926,6 +957,7 @@ static void bx_linemem(const bendx_t *x, const bendx_buf_t *b)
 
     for (y = 0; y < b->rows; y++)
     {
+        BX_TICK(y);
         unsigned char *row, *src;
         unsigned pos = y % period;
         unsigned sy;
@@ -1005,6 +1037,7 @@ static void bx_membus(const bendx_t *x, const bendx_buf_t *b,
 
     for (y = 0; y < b->rows; y++)
     {
+        BX_TICK(y);
         unsigned char *row = b->base + (unsigned)y * len;
         const unsigned char *r = mem + (off + (unsigned)y * walk) % window;
 
@@ -1038,6 +1071,7 @@ static void bx_clock(const bendx_t *x, const bendx_buf_t *b, unsigned char *s0)
 
     for (y = 0; y < b->rows; y++)
     {
+        BX_TICK(y);
         unsigned char *row = b->base + (unsigned)y * len;
         unsigned ratio;
         unsigned pos;
@@ -1084,6 +1118,7 @@ static void bx_cfa(const bendx_t *x, const bendx_buf_t *b, unsigned char *s0)
 
     for (y = 0; y < b->rows; y++)
     {
+        BX_TICK(y);
         unsigned char *row = b->base + (unsigned)y * len;
         unsigned sy = y + dy;
         const unsigned char *src;
@@ -1134,6 +1169,7 @@ static void bx_clamp(const bendx_t *x, const bendx_buf_t *b,
 
     for (y = 0; y < b->rows; y++)
     {
+        BX_TICK(y);
         unsigned char *row = b->base + (unsigned)y * len;
         unsigned oy = (y + away) % b->rows;
         unsigned ob = bendx_get(b->base + (unsigned)oy * len, b->ob_x, b->nbits);
@@ -1190,6 +1226,7 @@ static void bx_bloom(const bendx_t *x, const bendx_buf_t *b, unsigned char *s)
 
     for (y = 0; y < b->rows; y++)
     {
+        BX_TICK(y);
         unsigned char *row = b->base + (unsigned)y * len;
 
         for (i = 0; i < npix; i++)
@@ -1260,6 +1297,7 @@ static void bx_sort(const bendx_t *x, const bendx_buf_t *b, unsigned char *s)
 
     for (y = 0; y < b->rows; y++)
     {
+        BX_TICK(y);
         unsigned char *row = b->base + (unsigned)y * len;
 
         if (!bx_on(x, y)) continue;
@@ -1342,6 +1380,7 @@ static void bx_lock(const bendx_t *x, const bendx_buf_t *b,
 
     for (y = 0; y < b->rows; y++)
     {
+        BX_TICK(y);
         unsigned char *row = b->base + (unsigned)y * len;
 
         st = xs32(st);

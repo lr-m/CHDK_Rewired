@@ -2397,6 +2397,17 @@ static void bm_status_draw(void)
 #endif
 }
 
+// Rebuild every cached layer on the next pass. Called on the falling edge of
+// the review - see gui_redraw() in core/gui.c. bm_dirty alone is not enough:
+// the mask and the bar track what they last drew, and after Canon has wiped the
+// bitmap those caches are describing pixels that no longer exist.
+void gui_bend_force_redraw(void)
+{
+    bm_mask_shown = 0;
+    bm_br_drawn_h = 0;
+    bm_dirty      = 1;
+}
+
 static void bm_draw(int force)
 {
     static int last_hash = -1;
@@ -2409,12 +2420,24 @@ static void bm_draw(int force)
     // the region mask (or any Bend controls) into Canon's capture/review copy.
     // Mark every cached layer absent so the first live-view redraw rebuilds the
     // normal mask -> grid -> controls stack from the bottom.
-    if (gui_shot_ui_hidden())
+    // Canon's review counts as hidden, and leaving it out broke this two ways
+    // at once. The patchbay kept painting, so it landed on top of the reviewed
+    // photograph; and because it never took this branch it never set bm_dirty,
+    // so once the review ended the hash below was unchanged and the early
+    // return meant nothing repainted it. Pressing MENU forced a redraw, which
+    // is what made it look like a redraw problem rather than a missing gate.
+    //
+    // posd_review_active() is the flag reversed out of this firmware - see
+    // posd_review_on_screen() in core/gui.c. CHDK's recreview_hold is not it.
     {
-        bm_mask_shown = 0;
-        bm_br_drawn_h = 0;
-        bm_dirty = 1;
-        return;
+        extern int posd_review_active(void);
+        if (gui_shot_ui_hidden() || posd_review_active())
+        {
+            bm_mask_shown = 0;
+            bm_br_drawn_h = 0;
+            bm_dirty = 1;
+            return;
+        }
     }
 
     // The layout can have been switched off since the last redraw, from the

@@ -180,6 +180,7 @@ void bend_tag_queue(const char *dir, long num,
 // card full, card pulled - leaves the photograph exactly as Canon wrote it and
 // costs nothing but a stray .TMP.
 
+#ifndef CAM_BEND_TAG_INJECT
 static int bt_tmp_path(const char *jpg, char *out, int outlen)
 {
     int len = (int)strlen(jpg);
@@ -192,6 +193,24 @@ static int bt_tmp_path(const char *jpg, char *out, int outlen)
 
 // Is the file a complete JPEG that we have not already tagged? Returns 1 to go
 // ahead, 0 to wait, -1 to give up on it.
+// Two ways of getting the recipe into the picture, and which one a body uses is
+// decided by whether CHDK can see Canon's writes on it.
+//
+// CAM_BEND_TAG_INJECT - the good one. CHDK replaces Canon's file-write task, so
+// fwt_write() sees every chunk on its way to the card and the comment is
+// slipped in as the picture is written. One extra write of a few hundred bytes,
+// no delay, no temp file. Needs DryOS (fwt_write is inside #ifdef CAM_DRYOS)
+// *and* boot.c to actually install the replacement task: true on the a470 and
+// a480, false on every VxWorks body here.
+//
+// Otherwise - the fallback below. Wait for the picture to be finished, then
+// copy it to a .TMP with the comment spliced in at the front and rename over
+// the original. Inserting at the front of a file means rewriting all of it:
+// 13.6MB of I/O for a 6.8MB frame, several seconds, and it runs in spytask so
+// it stalls everything CHDK draws for that long. That is the fault this whole
+// mechanism was rebuilt to avoid - it is kept only because on those bodies the
+// alternative is no tag at all.
+// 1 ready, 0 not yet, -1 already ours.
 static int bt_ready(const char *path)
 {
     unsigned char head[4];
@@ -203,8 +222,6 @@ static int bt_ready(const char *path)
     if (read(fd, head, 2) == 2 && head[0] == 0xff && head[1] == 0xd8)
     {
         // Already ours? The next segment is a comment beginning with the mark.
-        // Re-tagging would nest one comment inside another every time the card
-        // was browsed.
         if (read(fd, head, 2) == 2 && head[0] == 0xff && head[1] == 0xfe)
         {
             char mark[sizeof(BEND_TAG_MARK)];
@@ -216,15 +233,11 @@ static int bt_ready(const char *path)
             }
         }
 
-        // Finished? A closed JPEG ends FFD9. One still being written does not,
-        // and this is the whole of how the wait knows it is over.
+        // Finished? A closed JPEG ends FFD9. One still being written does not.
         if (lseek(fd, -2, SEEK_END) >= 0 &&
             read(fd, head, 2) == 2 && head[0] == 0xff && head[1] == 0xd9)
             ok = 1;
     }
-    else
-        ok = -1;                                // not a JPEG at all
-
     close(fd);
     return ok;
 }
@@ -236,10 +249,7 @@ static int bt_rewrite(const char *path, const char *text, int len)
     unsigned char *buf;
     int src, dst, n, seg, ok = 0;
 
-    // A comment segment's length field covers itself, so it is the payload
-    // plus its own two bytes - and it is two bytes, so the payload cannot be
-    // more than 65533. BT_TEXT_MAX is nowhere near that; the check is here
-    // because a length written wrong is a corrupt photograph.
+    // A comment segment's length field covers itself.
     seg = len + 2;
     if (len <= 0 || seg > 0xfffd) return 0;
     if (!bt_tmp_path(path, tmp, sizeof(tmp))) return 0;
@@ -284,6 +294,116 @@ static int bt_rewrite(const char *path, const char *text, int len)
     return 1;
 }
 
+#endif // !CAM_BEND_TAG_INJECT
+
+// Written into the picture as Canon writes it, not afterwards.
+//
+// **What this replaces, and why.** The tag is a JPEG comment segment that goes
+// directly after the SOI, at the very front of the file. A filesystem cannot
+// insert into the middle of a file - only overwrite or append - so putting ~500
+// bytes at the front used to mean writing a whole new copy of the picture:
+// 13.6MB of I/O and 1734 calls through Canon's FIO for a 6.8MB frame, several
+// seconds, scaling with picture size. Worse, it ran in spytask, which is the
+// task that draws, so it also cost the overlay for its duration; and being
+// interrupted left a half-written .TMP beside an untagged JPEG.
+//
+// None of that was necessary. CHDK already replaces Canon's file-write task on
+// these bodies (platform/<cam>/sub/<fw>/filewrite.c, installed from boot.c), so
+// fwt_write() sees every chunk on the way to the card. The first chunk of a
+// JPEG begins FFD8. Emit the SOI, then the comment, then the rest of the chunk,
+// and the tag is in the file Canon is already writing - one extra write of a
+// few hundred bytes, once, and nothing else changes.
+//
+// Two properties of this firmware make it safe, and both were checked:
+//   - a COM inserted *before* the Exif APP1 does not disturb Exif, whose
+//     internal offsets are relative to its own segment. That was already true
+//     of the rewrite this replaces.
+//   - neither CAM_FILEWRITETASK_SEEKS nor CAM_FILEWRITETASK_MULTIPASS is set
+//     here, so Canon writes the file straight through and never seeks back to
+//     patch a header at an offset our inserted bytes would have moved.
+//
+// Guards, because this is the photograph: inject only when a tag is pending,
+// only into the file whose name we queued, only on that file's first chunk, and
+// only if that chunk really does start FFD8. Anything else passes through
+// untouched and the tag is simply not written.
+static volatile int bt_arm;             // this file is ours; inject on chunk 1
+static char bt_open_name[BEND_TAG_PATHLEN];
+static unsigned char bt_hdr[4];         // FFFE + length; the text is written
+                                        // straight from bt_text behind it
+
+// Both of these run in Canon's file-write task. Copies and compares only.
+void bend_tag_note_file_open(const char *name)
+{
+    int a = 0, b = 0, i;
+
+    bt_arm = 0;
+    if (!name || !bt_pending) return;
+
+    for (i = 0; i < BEND_TAG_PATHLEN - 1 && name[i]; i++) bt_open_name[i] = name[i];
+    bt_open_name[i] = 0;
+
+    // Match on the "IMG_1234.JPG" tail: CHDK's path and Canon's are not spelt
+    // identically, but that part identifies the file.
+    while (bt_open_name[a]) a++;
+    while (bt_path[b])      b++;
+    if (a < 12 || b < 12) return;
+    for (i = 1; i <= 12; i++)
+        if (bt_open_name[a - i] != bt_path[b - i]) return;
+
+    bt_arm = 1;
+}
+
+void bend_tag_note_file_closed(void)
+{
+    bt_arm = 0;
+}
+
+// The comment segment to insert, or 0. Handed back as its four-byte header
+// plus a pointer to the text, rather than assembled into one buffer: the buffer
+// was a 1032-byte .bss array to save one _Write call, on a body with under 2KB
+// of core budget left. Two writes are free; the array was not.
+int bend_tag_segment(const unsigned char **hdr, int *hdrlen,
+                     const char **text, int *textlen)
+{
+    int seg;
+
+    if (!bt_arm || !bt_pending || bt_len <= 0) return 0;
+    seg = bt_len + 2;                   // the length field covers itself
+    if (seg > 0xfffd) return 0;
+
+    bt_hdr[0] = 0xff;
+    bt_hdr[1] = 0xfe;
+    bt_hdr[2] = (unsigned char)((seg >> 8) & 0xff);
+    bt_hdr[3] = (unsigned char)(seg & 0xff);
+
+    *hdr = bt_hdr;   *hdrlen  = 4;
+    *text = bt_text; *textlen = bt_len;
+    return 1;
+}
+
+// Called once the segment has actually reached the card.
+void bend_tag_segment_written(void)
+{
+    bt_arm     = 0;
+    bt_pending = 0;
+}
+
+#ifdef CAM_BEND_TAG_INJECT
+
+// Nothing left for spytask to do - fwt_write() has it. Kept so the call site in
+// core/main.c stays valid, and so a queued tag whose file never arrives is
+// eventually dropped rather than held forever.
+void bend_tag_service(void)
+{
+    if (!bt_pending) return;
+    if (((int)get_tick_count() - bt_at) > BT_GIVEUP_MS) bt_pending = 0;
+}
+
+#else
+
+// The fallback: poll, then rewrite. See the note above bt_ready(). This blocks
+// spytask inside Canon's write and stalls the display for the length of the
+// save; it is here because on these bodies there is no write to hook.
 void bend_tag_service(void)
 {
     int t;
@@ -303,12 +423,12 @@ void bend_tag_service(void)
         bt_pending = 0;
         break;
     default:
-        // Still being written. Give up eventually rather than looking at a
-        // file that is never going to appear on every pass forever.
         if ((t - bt_at) > BT_GIVEUP_MS) bt_pending = 0;
         break;
     }
 }
+
+#endif // CAM_BEND_TAG_INJECT
 
 //-------------------------------------------------------------------
 // Reading one back.

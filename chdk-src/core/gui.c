@@ -3696,35 +3696,73 @@ static int posd_hide_until = 0;
 #ifdef CAM_PERSISTENT_OSD_TRACK_REVIEW_EDGE
 static volatile int posd_waiting_for_review;
 static int posd_review_seen;
+static int posd_review_deadline;
 #endif
 
 // True while a shot is holding everything CHDK draws off the screen. Read by
 // posd_screen_active() for the plates and by gui_redraw() for the grid, so the
 // two cannot get out of step - the grid was left drawing through the hold once
 // and came back on the review just like the plates had.
+static int posd_review_on_screen(void);
+
 static int posd_shot_hold(void)
 {
 #ifdef CAM_PERSISTENT_OSD_TRACK_REVIEW_EDGE
-    extern int recreview_hold;
-
     if (posd_waiting_for_review)
     {
-        if (recreview_hold)
+        int now = get_tick_count();
+
+        if (posd_review_on_screen())
+        {
             posd_review_seen = 1;
+        }
         else if (posd_review_seen)
         {
             // Canon has just handed the LCD back to live view. JPEG/card work
             // may continue (orange LED), but it no longer owns the bitmap.
+            // This is the edge the whole mechanism exists for: it is the only
+            // signal here that tracks the *picture leaving the screen* rather
+            // than the save finishing behind it.
             posd_waiting_for_review = 0;
             posd_hide_until = 0;
         }
-        else if (camera_info.state.state_shooting_progress != SHOOTING_PROGRESS_PROCESSING)
+        else if (!posd_hide_until || ((now - posd_hide_until) >= 0))
         {
-            // Review disabled, or a capture path that never starts one.
+            // The hide window has run out and no review ever appeared. Either
+            // review is switched off or this capture path does not start one,
+            // so there is no falling edge coming and waiting for one would
+            // strand the overlay until the next shot.
+            //
+            // Gated on the exposure being over rather than on the save being
+            // over. Waiting for SHOOTING_PROGRESS to leave PROCESSING is what
+            // the old version did, and that is exactly the JPEG/card tail this
+            // is here to stop waiting for - it made the delay proportional to
+            // how long the picture took to write. A long exposure can outlast
+            // the hide window, though, and releasing during one would put the
+            // overlay back on screen in time for Canon to freeze it into the
+            // review, so STARTED - the exposure itself - still holds.
+            if (camera_info.state.state_shooting_progress != SHOOTING_PROGRESS_STARTED)
+                posd_waiting_for_review = 0;
+        }
+        else if (posd_review_deadline && ((now - posd_review_deadline) >= 0))
+        {
+            // Backstop. Everything above trusts recreview_hold, which is a
+            // per-firmware address; if it is wrong and reads non-zero forever
+            // the overlay would never come back at all. Give up rather than
+            // hang. Long enough that a review the user is holding open ends
+            // first on any of these bodies.
             posd_waiting_for_review = 0;
         }
     }
     if (posd_waiting_for_review)
+        return 1;
+#endif
+#ifdef CAM_PERSISTENT_OSD_HOLD_THROUGH_PROCESSING
+    // Still developing or writing the picture - see the define in camera.h.
+    // Without this the hide timer expires mid-capture, raw_service_ui() repaints
+    // the plates from inside the bend loops, and Canon freezes the bitmap for
+    // the review with them already on it.
+    if (camera_info.state.state_shooting_progress == SHOOTING_PROGRESS_PROCESSING)
         return 1;
 #endif
     return posd_hide_until && (get_tick_count() < posd_hide_until);
@@ -3741,9 +3779,21 @@ void gui_bend_grid_repaint(void)
     int canon_menu_hidden = (canon_menu_active != (int)&canon_menu_active-4)
                          || canon_shoot_menu_active;
 
-    if (camera_info.state.mode_rec && !canon_menu_hidden &&
-        conf.show_grid_lines && !posd_shot_hold() && libgrids)
-        libgrids->gui_grid_draw_osd(1);
+    // The review as well: the grid must never land on Canon's reviewed
+    // photograph, and unlike the plates it is not erased ahead of the review.
+    //
+    // This used to test recreview_hold == 0, and that is why the grid appeared
+    // on top of the review in Bend UI mode while ordinary shooting hid it
+    // correctly: ordinary shooting goes through posd_grid_active(), which was
+    // corrected, and Bend UI comes through here, which was missed. On this
+    // firmware recreview_hold is the review *hold* flag and reads 0 during an
+    // ordinary review - see posd_review_on_screen().
+    {
+        if (camera_info.state.mode_rec && !canon_menu_hidden &&
+            conf.show_grid_lines && !posd_review_on_screen() &&
+            !posd_shot_hold() && libgrids)
+            libgrids->gui_grid_draw_osd(1);
+    }
 }
 
 #ifndef CAM_RECUI
@@ -3775,12 +3825,72 @@ static int posd_canon_owns(void)
 static int posd_canon_owns(void) { return 0; }
 #endif
 
+// Whether Canon's post-shot review still blocks the overlay.
+//
+// Normally it does: recreview_hold is Canon's own "a review is on screen" flag
+// and CHDK must stay off the bitmap while it is set.
+//
+// CAM_PERSISTENT_OSD_TIMEOUT_OWNS_REVIEW inverts who decides, for a body whose
+// review *replaces* the bitmap rather than sharing it (see
+// CAM_PERSISTENT_OSD_CANON_REVIEW_OWNS_ERASE, its partner). There the flag can
+// stay asserted into the JPEG/card tail long after the picture has left the
+// screen, and gating on it holds the overlay down for the whole save. The
+// posd_hide_until deadline set by posd_hide_now() already covers the review
+// window, so on those bodies the timeout is the more accurate of the two.
+// "Is one of Canon's post-shot reviews on screen right now."
+//
+// CHDK's recreview_hold is the default answer and is wrong on at least one body
+// here. Reversed out of the A470 102c ROM: 0x5b64, which finsig labels
+// recreview_hold, is written in exactly two places - ShtCon_StartReview clears
+// it to 0, and ShootCon_NotifyStartReviewHold (FUN_ffc6432c, the function
+// finsig found it in) sets it to 1. It is the review *hold* flag, as its name
+// says: it tracks the shutter being held to keep the review up. During an
+// ordinary review it reads 0, so CHDK concluded no review was on screen and
+// painted the overlay onto the photograph; and when the hold path did fire it
+// stayed 1 until NotifyCompleteReviewHold at the end of the sequence, so the
+// falling edge arrived only once the save had finished - the delay that grew
+// with the bend.
+//
+// CAM_REVIEW_ACTIVE_FLAG is the address of the real one, where a port has
+// reversed it. On the A470 that is 0x5b4c, the ShootCon state field set to 1 in
+// ShtCon_StartReview beside the _EntryActionReview log and cleared in
+// _ExitActionReview, and tested as a state guard in five other places.
+//
+// This is firmware-specific, not camera-specific. Do not copy the number.
+static int posd_review_on_screen(void)
+{
+#ifdef CAM_REVIEW_ACTIVE_FLAG
+    return *(volatile int*)CAM_REVIEW_ACTIVE_FLAG != 0;
+#else
+    extern int recreview_hold;
+    return recreview_hold != 0;
+#endif
+}
+
+// The same test, for code outside this file - see gui_bend.c. The Bend UI is
+// drawn by its own gui_handler and had no idea a review was on screen.
+int posd_review_active(void)
+{
+    return posd_review_on_screen();
+}
+
+static int posd_review_blocks(void)
+{
+#if defined(CAM_PERSISTENT_OSD_TIMEOUT_OWNS_REVIEW) && !defined(CAM_REVIEW_ACTIVE_FLAG)
+    // Only meaningful while the flag being read is the wrong one. With a
+    // signal that actually tracks the review, its level is the right test and
+    // there is nothing to hand to a timeout.
+    return 0;
+#else
+    return posd_review_on_screen();
+#endif
+}
+
 // Exactly the screens on which CHDK owns the display. Keeping this test in one
 // place makes the overlay, Canon-OSD gate and grid clipping change together.
 static int posd_screen_active(void)
 {
     extern int canon_menu_active;
-    extern int recreview_hold;
 
     // There used to be a handover here. Any press of LEFT/RIGHT/UP/DOWN/SET
     // gave the bitmap back to Canon for POSD_CANON_MS, because Canon's flash
@@ -3802,7 +3912,7 @@ static int posd_screen_active(void)
     return !posd_canon_owns()
         && camera_info.state.mode_rec
         && !camera_info.state.mode_play
-        && recreview_hold == 0
+        && !posd_review_blocks()
         &&  camera_info.state.gui_mode_none
         && !camera_info.state.gui_mode_alt
         && (canon_menu_active == (int)&canon_menu_active-4)
@@ -3824,12 +3934,20 @@ static int posd_screen_active(void)
 static int posd_grid_active(void)
 {
     extern int canon_menu_active;
-    extern int recreview_hold;
 
+    // The grid keeps the review-flag gate even where the plates give it up.
+    //
+    // CAM_PERSISTENT_OSD_TIMEOUT_OWNS_REVIEW exists because on the A470 the
+    // plates are erased before Canon's review and Canon's review owns the
+    // bitmap from then on, so gating them on recreview_hold only held them down
+    // into the JPEG/card tail. The grid is not erased the same way: measured on
+    // the body, dropping this gate drew the framing grid straight onto the
+    // reviewed photograph. So the timeout owns the plates, and Canon's flag
+    // still owns the grid.
     return !posd_canon_owns()
         && camera_info.state.mode_rec
         && !camera_info.state.mode_play
-        && recreview_hold == 0
+        && !posd_review_on_screen()
         && camera_info.state.gui_mode_none
         && !camera_info.state.gui_mode_alt
         && (canon_menu_active == (int)&canon_menu_active-4)
@@ -3838,6 +3956,75 @@ static int posd_grid_active(void)
         && !kbd_is_key_pressed(KEY_SHOOT_FULL)
         && !posd_shot_hold();
 }
+
+// On-screen readout of every condition that decides whether the overlay and
+// grid may paint. Drawn straight from spytask, unconditionally, so it survives
+// exactly the situation it is diagnosing - the one where nothing else draws.
+//
+// This exists because the post-shot delay was guessed at twice and both guesses
+// were wrong. The gates involved are spread across Canon firmware variables,
+// CHDK state and a timer, and which of them is actually false during the stall
+// is not deducible from the source - it has to be read off the body.
+//
+//   R  recreview_hold          Canon's "a review is on screen" flag
+//   H  posd_shot_hold()        CHDK's own post-shutter hide
+//   W  posd_waiting_for_review the review-edge wait inside posd_shot_hold()
+//   S  state_shooting_progress 0 none 1 started 2 processing 3 done
+//   A  posd_screen_active()    may the plates paint
+//   G  posd_grid_active()      may the grid paint
+//   M  gui_mode_none           no CHDK GUI is up
+//   C  canon_menu_active       Canon thinks a menu is open
+//   E  mode_rec                Canon reports record mode (from playrec_mode)
+//   P  mode_play               Canon reports play mode
+//   F  is_shutter_half_press
+//
+// Read it during the stall. Whichever of A/G is 0 names the layer that is
+// blocked, and the terms around it say which gate did it.
+//
+// R/H/S/M/C were the whole line once, and that was not enough: a stall with
+// all five reading "clear" and A still 0 leaves nothing named, which is the
+// position the A470 was in. Every term posd_screen_active() actually tests is
+// on the line now - in particular mode_rec, which is derived from Canon's
+// playrec_mode and is the one gate here that is neither CHDK state nor a flag
+// this file sets.
+#ifdef CAM_POSD_GATE_DEBUG
+unsigned posd_spy_loops;    // spytask main-loop passes; see the readout below
+
+void posd_gate_debug_draw(void)
+{
+    extern int canon_menu_active;
+    extern int recreview_hold;
+    static char buf[64];
+    int canon_menu = (canon_menu_active != (int)&canon_menu_active-4)
+                  || canon_shoot_menu_active;
+
+    {
+        extern unsigned posd_spy_loops;
+        extern int raw_stage;
+        // L climbs only while spytask is running its own loop. Frozen L during
+        // the stall means spytask is inside raw_process(), and Z says where.
+        sprintf(buf, "L%u Z%d ", posd_spy_loops % 1000u, raw_stage);
+    }
+    sprintf(buf + strlen(buf), "R%d H%d W%d S%d A%d G%d M%d C%d E%d P%d F%d",
+            recreview_hold ? 1 : 0,
+            posd_shot_hold() ? 1 : 0,
+#ifdef CAM_PERSISTENT_OSD_TRACK_REVIEW_EDGE
+            posd_waiting_for_review ? 1 : 0,
+#else
+            0,
+#endif
+            (int)camera_info.state.state_shooting_progress,
+            posd_screen_active() ? 1 : 0,
+            posd_grid_active() ? 1 : 0,
+            camera_info.state.gui_mode_none ? 1 : 0,
+            canon_menu ? 1 : 0,
+            camera_info.state.mode_rec ? 1 : 0,
+            camera_info.state.mode_play ? 1 : 0,
+            camera_info.state.is_shutter_half_press ? 1 : 0);
+    draw_string(0, camera_screen.height - FONT_HEIGHT, buf,
+                MAKE_COLOR(COLOR_BLACK, COLOR_WHITE));
+}
+#endif
 
 // Shared by every full-screen assist layer. Shutter handling clears the bitmap
 // before Canon sees the key; no background or Bend layer may put pixels back
@@ -4392,8 +4579,25 @@ void posd_hide_now(int hold_ms, int clear_all)
     if (clear_all)
     {
 #ifdef CAM_PERSISTENT_OSD_TRACK_REVIEW_EDGE
-        posd_waiting_for_review = 1;
-        posd_review_seen = 0;
+        // Rising edge only. kbd_update_key_state() calls this on the *level* -
+        // once per key scan for as long as the shutter is held - and clearing
+        // posd_review_seen on every one of those is a race the user loses by
+        // holding the button down: Canon can raise and drop recreview_hold
+        // inside the hold, and each scan wipes the fact that the rise was seen.
+        // The edge is then never completed, posd_waiting_for_review stays set,
+        // and the overlay does not come back until the *next* shot re-arms the
+        // whole thing - which is exactly "sometimes pressing the shutter brings
+        // it back".
+        //
+        // The hold deadline below still moves forward on every call, which is
+        // the wanted level behaviour. Only the edge state is latched.
+        if (!posd_waiting_for_review)
+        {
+            posd_waiting_for_review = 1;
+            posd_review_seen = 0;
+            posd_review_deadline = get_tick_count() + CAM_PERSISTENT_OSD_REVIEW_MAX_MS;
+            if (posd_review_deadline == 0) posd_review_deadline = 1;
+        }
 #endif
         // The plates are not the only thing CHDK has on the screen. The grid is
         // drawn from gui_redraw() on a test of its own and posd_clear() has
@@ -5781,6 +5985,17 @@ void gui_redraw()
     // not hidden - but the patchbay repaints only when its own state changes,
     // and a photograph changes none of it. So the moment the screen is ours
     // again, tell it to draw. Edge-triggered: one repaint, not one per frame.
+    //
+    // This comment described the mechanism and no code implemented it, which is
+    // why the Bend UI stayed off the screen after a review until MENU was
+    // pressed - MENU forces a redraw, which is exactly what was missing.
+    {
+        extern void gui_bend_force_redraw(void);
+        static int bend_was_hidden;
+        int hidden = posd_shot_hold() || posd_review_on_screen();
+        if (bend_was_hidden && !hidden) gui_bend_force_redraw();
+        bend_was_hidden = hidden;
+    }
 #endif
 
 #ifdef CAM_DRAW_RGBA
@@ -5910,7 +6125,8 @@ void gui_redraw()
         }
         else if (flag_gui_enforce_redraw && camera_info.state.mode_rec &&
                  !canon_menu_hidden && conf.show_grid_lines &&
-                 !posd_shot_hold() && gui_bend_active())
+                 !posd_shot_hold() && !posd_review_on_screen() &&
+                 gui_bend_active())
         {
             // One grid paint on Bend entry; its opaque bands are drawn later.
             libgrids->gui_grid_draw_osd(1);

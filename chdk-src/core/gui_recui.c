@@ -131,7 +131,7 @@ static const char *const    n_mycol[] = { "OFF", "VIVID", "NEUTRAL", "B/W", "SEP
 
 //===========================================================================
 // Propset 1 - the VxWorks bodies. Derived for the A410 from
-// the A410 firmware, and every entry below is here because something in
+// cameras/a410/ghidra/, and every entry below is here because something in
 // that ROM or in CHDK's own cross-propset headers says so. The rows that
 // could not be established are *absent*, not guessed: a missing row is a
 // control you still have on Canon's UI, a wrong one is a silent mis-write.

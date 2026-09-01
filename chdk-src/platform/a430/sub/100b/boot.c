@@ -130,11 +130,23 @@ void my_startup_image_task(void)
     buf = (unsigned char *)t[0];
     chdk_startup_probe[9] = (unsigned)buf;
 
-    if (buf)
+    // The image now comes from a marker-tagged slot rather than a bare array,
+    // so that modules/boot_image.c can replace it inside DISKBOOT.BIN and
+    // Settings -> Boot screen works on this body too. The compiled-in default
+    // is the same picture this port has always drawn.
+    if (buf && BOOT_IMAGE_SLOT_VALID(boot_image_slot, BOOT_TAG_A430))
     {
-        for (i = 0; i < (int)sizeof(boot_image_jpeg); i++)
-            buf[i] = boot_image_jpeg[i];
-        t[1] = sizeof(boot_image_jpeg);
+        // Copy the image, then pad the rest of Canon's buffer with 0xff, as the
+        // generated header used to be padded.
+        for (i = 0; i < (int)boot_image_slot.size; i++)
+            buf[i] = boot_image_slot.jpeg[i];
+        for (; i < (int)boot_image_slot.capacity; i++)
+            buf[i] = 0xff;
+        // The declared length stays the full slot, which is what this camera's
+        // theme entry declares (18426) and what this port has always written.
+        // The getter rewrites this field from flash on every call anyway - see
+        // platform/a430/wrappers.c - so it is the buffer contents that matter.
+        t[1] = boot_image_slot.capacity;
         t[2] = (t[2] & 0xffff0000) | MYCAM_SLOT;
         chdk_startup_probe[10] = 1;
     }

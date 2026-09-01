@@ -74,11 +74,20 @@ void my_startup_image_task()
     // Populate the table now, then overwrite the buffer before it is displayed.
     MYCAM_INIT();
 
+    // The image now comes from a marker-tagged slot rather than a bare array,
+    // so that modules/boot_image.c can replace it inside DISKBOOT.BIN and
+    // Settings -> Boot screen works on this body too. The compiled-in default
+    // is the same picture this port has always drawn.
     buf = *(unsigned char **)(MYCAM_TABLE);
-    if (buf && buf[0] == 0xFF && buf[1] == 0xD8)    // only if it really holds a JPEG
+    if (buf && buf[0] == 0xFF && buf[1] == 0xD8    // only if it really holds a JPEG
+        && BOOT_IMAGE_SLOT_VALID(boot_image_slot, BOOT_TAG_A470))
     {
-        for (i = 0; i < (int)sizeof(boot_image_jpeg); i++)
-            buf[i] = boot_image_jpeg[i];
+        // Copy the image, then pad the rest of Canon's buffer with 0xff, as the
+        // generated header used to be padded.
+        for (i = 0; i < (int)boot_image_slot.size; i++)
+            buf[i] = boot_image_slot.jpeg[i];
+        for (; i < (int)boot_image_slot.capacity; i++)
+            buf[i] = 0xff;
     }
 
     // Entry 1 is Canon's startup sound ({buffer,size} at a 16-byte stride).

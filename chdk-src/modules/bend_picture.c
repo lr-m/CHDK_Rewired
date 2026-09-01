@@ -86,8 +86,16 @@ static int native_paused, native_ready;
 
 static const native_cfg_t *native_cfg(void)
 {
+    // The A410 answers to two sub names for one firmware. platform/a410/sub/100e
+    // builds from the 100f source ("identical firmware") but keeps TARGET_FW at
+    // 100e, and makefile_cam.inc passes -DPLATFORMSUB="$(TARGET_FW)" - so the
+    // shipped 100e build reports platformsub "100e" while the addresses below
+    // were recorded under "100f". Matching only "100f" meant the A410 - the one
+    // body this browser was first run on - silently took the fallback renderer.
+    // Both names select the same config because they are the same ROM.
     if(!strcmp(camera_info.platform,"a410") &&
-       !strcmp(camera_info.platformsub,"100f")) return &a410_100f_native;
+       (!strcmp(camera_info.platformsub,"100f") ||
+        !strcmp(camera_info.platformsub,"100e"))) return &a410_100f_native;
     if(!strcmp(camera_info.platform,"a430") &&
        !strcmp(camera_info.platformsub,"100b")) return &a430_100b_native;
     if(!strcmp(camera_info.platform,"a460") &&

@@ -10,142 +10,26 @@
 #include "stdlib.h"
 #include "stdio.h"
 #include "string.h"
-#include "limits.h"
-#include "meminfo.h"
 
-#ifndef INT_MIN
-#define INT_MIN (-2147483647-1)
-#endif
-#ifndef SHRT_MIN
-#define SHRT_MIN (-32767-1)
-#endif
-#ifndef UINT_MAX
-#define UINT_MAX 0xffffffffu
-#endif
 
-typedef struct { unsigned size; } boot_alloc_header_t;
-static unsigned boot_alloc_used;
-static unsigned boot_alloc_limit;
-
-static void *boot_stbi_malloc(unsigned size)
-{
-    boot_alloc_header_t *h;
-    if (!size || size > 0x7ffffff0u || size > boot_alloc_limit ||
-        boot_alloc_used > boot_alloc_limit - size)
-        return 0;
-    h = malloc((long)(sizeof(*h) + size));
-    if (!h) return 0;
-    h->size = size;
-    boot_alloc_used += size;
-    return h + 1;
-}
-
-static void boot_stbi_free(void *p)
-{
-    boot_alloc_header_t *h;
-    if (!p) return;
-    h = (boot_alloc_header_t *)p - 1;
-    if (boot_alloc_used >= h->size) boot_alloc_used -= h->size;
-    free(h);
-}
-
-static void *boot_realloc_sized(void *p, unsigned old_size, unsigned new_size)
-{
-    void *q = boot_stbi_malloc(new_size);
-    if (q && p) memcpy(q, p, old_size < new_size ? old_size : new_size);
-    if (q && p) boot_stbi_free(p);
-    return q;
-}
-
-static void *boot_memmove(void *dst, const void *src, unsigned n)
-{
-    unsigned char *d = dst;
-    const unsigned char *s = src;
-    if (d < s) while (n--) *d++ = *s++;
-    else { d += n; s += n; while (n--) *--d = *--s; }
-    return dst;
-}
-
-#define STBI_NO_STDIO
-#define STBI_NO_HDR
-#define STBI_NO_LINEAR
-#define STBI_NO_SIMD
-#define STBI_NO_THREAD_LOCALS
-#define STBI_ONLY_JPEG
-#define STBI_ONLY_PNG
-#define STBI_MAX_DIMENSIONS 1600
-#define STBI_ASSERT(x) ((void)0)
-#define STBI_MALLOC(sz) boot_stbi_malloc(sz)
-#define STBI_FREE(p) boot_stbi_free(p)
-#define STBI_REALLOC_SIZED(p,oldsz,newsz) boot_realloc_sized(p,oldsz,newsz)
-#define __SYMBIAN32__ 1 /* stb fixed-width typedefs; CHDK builds with -nostdinc */
-#define STB_IMAGE_IMPLEMENTATION
-#include "third_party/stb/stb_image.h"
-
-#define STBI_WRITE_NO_STDIO
-#define STBIW_ASSERT(x) ((void)0)
-#define STBIW_MALLOC(sz) boot_stbi_malloc(sz)
-#define STBIW_FREE(p) boot_stbi_free(p)
-#define STBIW_REALLOC_SIZED(p,oldsz,newsz) boot_realloc_sized(p,oldsz,newsz)
-#define STBIW_MEMMOVE(a,b,sz) boot_memmove(a,b,sz)
-#define STB_IMAGE_WRITE_IMPLEMENTATION
-#include "third_party/stb/stb_image_write.h"
+// No image decoder here any more.
+//
+// This module used to embed stb_image and stb_image_write to convert arbitrary
+// JPEG/PNG on the camera. That cost ~35 KB of module and, far worse, needed an
+// 18 KB decoder context plus the full decoded frame plus a 320x240 RGB buffer
+// plus the encoder - megabytes, on a body with a few hundred KB free. It is
+// what made "Import JPG/PNG" crash.
+//
+// Conversion now happens on a desktop with tools/mkbootjpg.py, which produces a
+// file already in the exact form the slot wants, and this module just copies
+// bytes into DISKBOOT.BIN. See boot_ready_jpeg() for what it insists on.
 
 static int running;
 static char result_msg[160];
 
-typedef struct { unsigned char *p; int n; int overflow; } jpg_sink_t;
 
-static void jpg_write(void *ctx, void *data, int size)
-{
-    jpg_sink_t *s = (jpg_sink_t *)ctx;
-    if (size < 0 || s->n + size > BOOT_SCREEN_MAX_JPEG) {
-        s->overflow = 1;
-        return;
-    }
-    memcpy(s->p + s->n, data, size);
-    s->n += size;
-}
 
-static void resize_contain(const unsigned char *src, int sw, int sh, int comp,
-                           unsigned char *dst)
-{
-    int dw, dh, ox, oy, x, y;
-    if (sw * BOOT_SCREEN_HEIGHT > sh * BOOT_SCREEN_WIDTH) {
-        dw = BOOT_SCREEN_WIDTH;
-        dh = sh * BOOT_SCREEN_WIDTH / sw;
-    } else {
-        dh = BOOT_SCREEN_HEIGHT;
-        dw = sw * BOOT_SCREEN_HEIGHT / sh;
-    }
-    if (dw < 1) dw = 1;
-    if (dh < 1) dh = 1;
-    ox = (BOOT_SCREEN_WIDTH - dw) / 2;
-    oy = (BOOT_SCREEN_HEIGHT - dh) / 2;
-    memset(dst, 0, BOOT_SCREEN_WIDTH * BOOT_SCREEN_HEIGHT * 3);
-    for (y = 0; y < dh; y++) {
-        int sy = y * sh / dh;
-        for (x = 0; x < dw; x++) {
-            int sx = x * sw / dw;
-            const unsigned char *p = src + (sy * sw + sx) * comp;
-            unsigned char *q = dst + ((y + oy) * BOOT_SCREEN_WIDTH + x + ox) * 3;
-            q[0] = p[0]; q[1] = p[1]; q[2] = p[2];
-        }
-    }
-}
 
-static int encode_frame(const unsigned char *rgb, unsigned char *jpg)
-{
-    int quality;
-    for (quality = 88; quality >= 28; quality -= 6) {
-        jpg_sink_t s = { jpg, 0, 0 };
-        if (stbi_write_jpg_to_func(jpg_write, &s, BOOT_SCREEN_WIDTH,
-                                   BOOT_SCREEN_HEIGHT, 3, rgb, quality) &&
-            !s.overflow && s.n > 0 && s.n <= BOOT_SCREEN_MAX_JPEG)
-            return s.n;
-    }
-    return 0;
-}
 
 static const char *base_name(const char *path)
 {
@@ -164,78 +48,260 @@ static unsigned char diskboot_dance(unsigned char v, unsigned pos)
     return (unsigned char)((v >> 4) | (v << 4));
 }
 
-// A480 uses dancing-bits version 2. Decode/encode one raw eight-byte group;
-// DISKBOOT has one unencoded prefix byte before group zero.
-static void diskboot_decode_group(const unsigned char *enc, unsigned char *raw,
-                                  unsigned raw_pos)
+// How this camera's DISKBOOT.BIN is encoded, and which slot marker it carries.
+//
+// NEED_ENCODED_DISKBOOT in platform/<cam>/sub/<fw>/makefile.inc selects the
+// permutation, and the value is the 1-based row of _chr_[] in
+// tools/dancingbits.h. A camera that does not set it at all - every VxWorks
+// body here - writes DISKBOOT.BIN as plain bytes, which is `enc_version 0`.
+//
+//   a430  (none)  plain          a460  (none)  plain
+//   a470  1       original       a480  2       nacho cheese
+//
+// Modules cannot include camera.h, so this is selected from camera_info at
+// runtime - the same pattern modules/bend_picture.c uses for its viewport
+// addresses.
+typedef struct {
+    const char *platform;
+    const char *tag;            // the 4 marker characters
+    int enc_version;            // 0 = unencoded, else NEED_ENCODED_DISKBOOT
+    unsigned capacity;          // bytes reserved for jpeg[] in that slot
+} boot_slot_cfg_t;
+
+// capacity must match what tools/mkbootslot.py reserved for that camera. It is
+// read back out of the slot as well and the two are required to agree, so a
+// header regenerated at a different size fails the import rather than writing
+// past the slot into whatever follows it.
+static const boot_slot_cfg_t boot_slot_cfgs[] = {
+    { "a430", "A430", 0, 18426 },
+    { "a460", "A460", 0, 18426 },
+    { "a470", "A470", 1, 17500 },   // smaller: this core has no room for more
+    { "a480", "A480", 2,  7168 },   // core slot, sized to AgentRAM budget
+};
+
+// _chr_[] from tools/dancingbits.h, rows 1 and 2 - the only ones any camera
+// here uses. Indexed by enc_version-1.
+static const unsigned char diskboot_perms[2][8] = {
+    { 4,6,1,0,7,2,5,3 },        // version 1 - original flavor
+    { 5,3,6,1,2,7,0,4 },        // version 2 - nacho cheese
+};
+
+static const boot_slot_cfg_t *boot_slot_cfg(void)
 {
-    static const unsigned char perm[8] = {5,3,6,1,2,7,0,4};
+    unsigned i;
+    for (i = 0; i < sizeof(boot_slot_cfgs)/sizeof(boot_slot_cfgs[0]); i++)
+        if (!strcmp(camera_info.platform, boot_slot_cfgs[i].platform))
+            return &boot_slot_cfgs[i];
+    return 0;
+}
+
+// Decode/encode one raw eight-byte group. DISKBOOT has one unencoded prefix
+// byte before group zero. `dance` is its own inverse, so decoding and encoding
+// differ only in which side of the permutation is indexed.
+static void diskboot_decode_group(const unsigned char *enc, unsigned char *raw,
+                                  unsigned raw_pos, const unsigned char *perm)
+{
     int i;
     for (i = 0; i < 8; i++) raw[i] = diskboot_dance(enc[perm[i]], raw_pos+i);
 }
 
 static void diskboot_encode_group(const unsigned char *raw, unsigned char *enc,
-                                  unsigned raw_pos)
+                                  unsigned raw_pos, const unsigned char *perm)
 {
-    static const unsigned char perm[8] = {5,3,6,1,2,7,0,4};
     int i;
     for (i = 0; i < 8; i++) enc[perm[i]] = diskboot_dance(raw[i], raw_pos+i);
 }
 
-static int install_early_jpeg(const unsigned char *jpeg, unsigned jpeg_size)
+// DISKBOOT.BIN is rewritten a chunk at a time, not a group at a time.
+//
+// The file is ~187 KB, which is 23398 eight-byte dancing-bits groups. Reading
+// and writing one group per fread/fwrite meant ~47000 stdio calls to install an
+// image, and the read-back verification below added another 23000 on top. On a
+// DryOS FAT stream that is enough work to look like a hang. One 4 KB buffer
+// turns the whole thing into ~140 calls.
+//
+// The transform is still per group: the permutation and the position-dependent
+// dance both work on eight raw bytes at a time, and the position is the offset
+// within the file's 0x400-byte chunk. Only the I/O is batched.
+#define BOOT_IO_CHUNK 4096              /* multiple of 8 */
+static unsigned char boot_io_buf[BOOT_IO_CHUNK];
+
+// Transform one buffer of groups in place, and hand each raw byte to `visit`.
+// Returns the number of whole groups processed.
+typedef void (*boot_byte_fn)(unsigned char *b, void *ctx);
+
+static int boot_walk_chunk(unsigned char *buf, int n, unsigned *raw_pos,
+                           const unsigned char *perm, boot_byte_fn visit,
+                           void *ctx)
 {
-    static const unsigned char marker[16] = {
-        'B','O','O','T','S','L','O','T','A','4','8','0','I','M','G','1'
-    };
+    int g, i, groups = n / 8;
+    for (g = 0; g < groups; g++) {
+        unsigned char *e = buf + g * 8;
+        unsigned char raw[8];
+        if (perm) diskboot_decode_group(e, raw, *raw_pos, perm);
+        else      memcpy(raw, e, 8);
+        for (i = 0; i < 8; i++) visit(&raw[i], ctx);
+        if (perm) diskboot_encode_group(raw, e, *raw_pos, perm);
+        else      memcpy(e, raw, 8);
+        *raw_pos += 8;
+    }
+    return groups;
+}
+
+// --- the install pass ------------------------------------------------------
+typedef struct {
+    const unsigned char *marker;
+    const unsigned char *jpeg;
+    unsigned jpeg_size, capacity;
+    unsigned match, patch_pos, seen_capacity;
+    int found;
+} boot_patch_ctx;
+
+static void boot_patch_byte(unsigned char *b, void *vctx)
+{
+    boot_patch_ctx *c = (boot_patch_ctx *)vctx;
+    if (!c->found) {
+        if (*b == c->marker[c->match]) c->match++;
+        else c->match = (*b == c->marker[0]) ? 1 : 0;
+        if (c->match == 16) c->found = 1;
+    } else if (c->patch_pos < 8 + c->capacity) {
+        unsigned k = c->patch_pos;
+        if (k < 4)                                  // capacity: read, never rewrite
+            c->seen_capacity |= ((unsigned)*b) << (k * 8);
+        else if (k < 8)
+            *b = (unsigned char)((c->jpeg_size >> ((k - 4) * 8)) & 0xff);
+        else
+            *b = (k - 8 < c->jpeg_size) ? c->jpeg[k - 8] : 0xff;
+        c->patch_pos++;
+    }
+}
+
+// --- the verification pass -------------------------------------------------
+typedef struct {
+    const unsigned char *marker;
+    const unsigned char *jpeg;
+    unsigned jpeg_size, capacity;
+    unsigned match, got, size_seen, cap_seen;
+    int found, bad;
+} boot_check_ctx;
+
+static void boot_check_byte(unsigned char *b, void *vctx)
+{
+    boot_check_ctx *c = (boot_check_ctx *)vctx;
+    if (!c->found) {
+        if (*b == c->marker[c->match]) c->match++;
+        else c->match = (*b == c->marker[0]) ? 1 : 0;
+        if (c->match == 16) c->found = 1;
+    } else if (c->got < 8 + c->capacity) {
+        unsigned k = c->got;
+        if (k < 4)                    c->cap_seen  |= ((unsigned)*b) << (k * 8);
+        else if (k < 8)               c->size_seen |= ((unsigned)*b) << ((k - 4) * 8);
+        else if (k - 8 < c->jpeg_size && *b != c->jpeg[k - 8]) c->bad = 1;
+        c->got++;
+    }
+}
+
+// Read the slot back out of a written DISKBOOT and check it says what we meant
+// it to say. Called on the temporary file *before* it replaces the real one.
+//
+// Worth the second pass: the alternative is discovering the write went wrong at
+// the next power-on, by which point the working boot file has been renamed away.
+// A short write, a full card or a bad sector all land here as "refused".
+static int verify_slot_in_file(const char *path, const unsigned char *marker,
+                               const unsigned char *jpeg, unsigned jpeg_size,
+                               unsigned cfg_capacity, const unsigned char *perm)
+{
+    FILE *f = fopen(path, "rb");
+    boot_check_ctx c;
+    unsigned raw_pos = 0;
+    unsigned char prefix;
+    int n, ok = 0;
+
+    if (!f) return 0;
+    memset(&c, 0, sizeof(c));
+    c.marker = marker; c.jpeg = jpeg;
+    c.jpeg_size = jpeg_size; c.capacity = cfg_capacity;
+
+    if (perm && fread(&prefix, 1, 1, f) != 1) goto out;
+    while ((n = fread(boot_io_buf, 1, BOOT_IO_CHUNK, f)) > 0) {
+        boot_walk_chunk(boot_io_buf, n, &raw_pos, perm, boot_check_byte, &c);
+        if (c.bad) goto out;
+    }
+    ok = c.found && !c.bad && c.got == 8 + cfg_capacity &&
+         c.cap_seen == cfg_capacity && c.size_seen == jpeg_size;
+out:
+    fclose(f);
+    return ok;
+}
+
+static int install_early_jpeg(const unsigned char *jpeg, unsigned jpeg_size,
+                              unsigned cfg_capacity)
+{
     static const char original[] = "A/DISKBOOT.BIN";
     static const char temporary[] = "A/DISKBNEW.BIN";
     static const char backup[] = "A/DISKBOOT.BAK";
+    const boot_slot_cfg_t *cfg = boot_slot_cfg();
+    const unsigned char *perm;
+    unsigned char marker[16];
     FILE *src = 0, *dst = 0;
-    unsigned char enc[8], raw[8];
-    unsigned raw_pos = 0, match = 0, patch_pos = 0;
-    unsigned patch_size = 4 + BOOT_SCREEN_MAX_JPEG;
-    int found = 0, ok = 0;
+    boot_patch_ctx pc;
+    unsigned raw_pos = 0;
+    int found = 0, ok = 0, n, j;
     unsigned char prefix;
 
-    if (!jpeg || jpeg_size < 4 || jpeg_size > BOOT_SCREEN_MAX_JPEG) return 0;
+    if (!jpeg || jpeg_size < 4 || jpeg_size > cfg_capacity) return 0;
+    if (!cfg) return 0;
+
+    // "BOOTSLOT" <tag> "IMG1" - the same 16 bytes tools/mkbootslot.py writes and
+    // include/boot_screen.h checks. Built here rather than stored so the
+    // per-camera tag is the only thing that varies.
+    memcpy(marker, "BOOTSLOT", 8);
+    for (j = 0; j < 4; j++) marker[8+j] = (unsigned char)cfg->tag[j];
+    memcpy(marker+12, "IMG1", 4);
+
+    perm = cfg->enc_version ? diskboot_perms[cfg->enc_version - 1] : 0;
+
     remove(temporary);
     src = fopen(original, "rb");
     dst = fopen(temporary, "wb");
     if (!src || !dst) goto done;
 
-    // The first DISKBOOT byte is not dancing-bits encoded. Rewrite the whole
-    // file sequentially: random read/write seeks on this DryOS FAT stream can
-    // silently leave the write cursor thousands of bytes from the requested
-    // location.
-    if (fread(&prefix, 1, 1, src) != 1 ||
-        fwrite(&prefix, 1, 1, dst) != 1) goto done;
-    while (fread(enc, sizeof(enc), 1, src) == 1) {
-        int i;
-        diskboot_decode_group(enc, raw, raw_pos);
-        for (i = 0; i < 8; i++) {
-            if (!found) {
-                unsigned char b = raw[i];
-                if (b == marker[match]) match++;
-                else match = (b == marker[0]) ? 1 : 0;
-                if (match == sizeof(marker)) found = 1;
-            } else if (patch_pos < patch_size) {
-                if (patch_pos < 4)
-                    raw[i] = (jpeg_size >> (patch_pos * 8)) & 0xff;
-                else {
-                    unsigned j = patch_pos - 4;
-                    raw[i] = (j < jpeg_size) ? jpeg[j] : 0xff;
-                }
-                patch_pos++;
-            }
-        }
-        diskboot_encode_group(raw, enc, raw_pos);
-        if (fwrite(enc, sizeof(enc), 1, dst) != 1) goto done;
-        raw_pos += 8;
+    // Rewrite the whole file sequentially rather than seeking to the slot:
+    // random read/write seeks on this FAT stream can silently leave the write
+    // cursor thousands of bytes from the requested location.
+    //
+    // On an encoded DISKBOOT the first byte is not encoded and every following
+    // group of eight is. On an unencoded one (the VxWorks bodies) there is no
+    // prefix and no transform - only the transform is switched off, so the same
+    // buffered loop serves both.
+    if (perm) {
+        if (fread(&prefix, 1, 1, src) != 1 ||
+            fwrite(&prefix, 1, 1, dst) != 1) goto done;
     }
-    if (!found || patch_pos != patch_size) goto done;
+    memset(&pc, 0, sizeof(pc));
+    pc.marker = marker; pc.jpeg = jpeg;
+    pc.jpeg_size = jpeg_size; pc.capacity = cfg_capacity;
+
+    while ((n = fread(boot_io_buf, 1, BOOT_IO_CHUNK, src)) > 0) {
+        boot_walk_chunk(boot_io_buf, n, &raw_pos, perm, boot_patch_byte, &pc);
+        // Any tail shorter than a group is carried through untouched; the slot
+        // is far from the end, so nothing patchable can live there.
+        if ((int)fwrite(boot_io_buf, 1, n, dst) != n) goto done;
+    }
+    found = pc.found;
+
+    if (!found || pc.patch_pos != 8 + cfg_capacity) goto done;
+    if (pc.seen_capacity != cfg_capacity) goto done;
     fclose(src); src = 0;
     if (fclose(dst) != 0) { dst = 0; goto done; }
     dst = 0;
+
+    // Read the replacement back before trusting it with the boot file. A short
+    // write, a full card or a bad sector otherwise only shows up at the next
+    // power-on, after the working DISKBOOT.BIN has already been renamed away.
+    if (!verify_slot_in_file(temporary, marker, jpeg, jpeg_size,
+                             cfg_capacity, perm))
+        goto done;
 
     // Keep the previous boot file recoverable until the replacement is in
     // place. If the second rename fails, restore it immediately.
@@ -253,77 +319,112 @@ done:
     return ok;
 }
 
+// Is this file already exactly what the slot wants?
+//
+// A boot-ready JPEG is 320x240 baseline, 3 components, standard Huffman tables,
+// and small enough for this camera's slot - which is what tools/mkbootjpg.py
+// produces. When a file is already that, importing it is a byte copy: no
+// decode, no resize, no re-encode, no megabyte buffers.
+//
+// That is now the only path. The importer used to convert arbitrary images on
+// the camera, and it is what made this feature unreliable - stb's decoder alone
+// wants an 18 KB context plus the full RGB frame, on a body with a few hundred
+// KB free. Converting on a desktop, where memory is free, and leaving the camera
+// to copy bytes, removes the whole failure surface.
+//
+// Checked, not assumed, because the firmware decoder renders anything it cannot
+// parse as a black screen with no way back except pulling the card.
+static int boot_ready_jpeg(const unsigned char *d, unsigned n, char *why)
+{
+    unsigned i = 2;
+
+    if (n < 4 || d[0] != 0xff || d[1] != 0xd8) {
+        strcpy(why, "not a JPEG");
+        return 0;
+    }
+    if (d[n-2] != 0xff || d[n-1] != 0xd9) {
+        strcpy(why, "JPEG is truncated");
+        return 0;
+    }
+    while (i + 3 < n) {
+        unsigned char m;
+        unsigned len;
+        if (d[i] != 0xff) { strcpy(why, "corrupt JPEG structure"); return 0; }
+        m = d[i+1];
+        if (m == 0xd8 || m == 0x01 || (m >= 0xd0 && m <= 0xd7)) { i += 2; continue; }
+        len = ((unsigned)d[i+2] << 8) | d[i+3];
+        if (len < 2 || i + 2 + len > n) { strcpy(why, "corrupt JPEG structure"); return 0; }
+        if (m == 0xc2) { strcpy(why, "progressive JPEG - must be baseline"); return 0; }
+        if (m == 0xc0) {                       // baseline SOF
+            unsigned h, w;
+            if (len < 8) { strcpy(why, "corrupt JPEG header"); return 0; }
+            h = ((unsigned)d[i+5] << 8) | d[i+6];
+            w = ((unsigned)d[i+7] << 8) | d[i+8];
+            if (w != BOOT_SCREEN_WIDTH || h != BOOT_SCREEN_HEIGHT) {
+                sprintf(why, "is %ux%u, needs %dx%d", w, h,
+                        BOOT_SCREEN_WIDTH, BOOT_SCREEN_HEIGHT);
+                return 0;
+            }
+            if (d[i+9] != 3) { strcpy(why, "not a colour JPEG"); return 0; }
+            return 1;                          // everything we can check, checked
+        }
+        if (m == 0xda) break;                  // SOS before SOF: no dimensions
+        i += 2 + len;
+    }
+    strcpy(why, "no image header found");
+    return 0;
+}
+
 static int import_image(const char *name)
 {
     struct stat st;
     FILE *in = 0;
-    unsigned char *file_data = 0, *decoded = 0, *rgb = 0, *jpg = 0;
-    int w = 0, h = 0, comp = 0, jpg_size = 0, ok = 0;
+    unsigned char *data = 0;
+    char why[64];
+    int ok = 0;
+    const boot_slot_cfg_t *cfg = boot_slot_cfg();
 
-    if (!name || stat(name, &st) != 0 || st.st_size <= 0 || st.st_size > 2*1024*1024) {
-        strcpy(result_msg, "Choose a JPG/PNG smaller than 2 MB");
+    if (!cfg) {
+        strcpy(result_msg, "This camera has no boot screen slot");
         goto done;
     }
-    file_data = malloc(st.st_size);
+    if (!name || stat(name, &st) != 0 || st.st_size <= 0) {
+        strcpy(result_msg, "Could not read that file");
+        goto done;
+    }
+    if ((unsigned)st.st_size > cfg->capacity) {
+        sprintf(result_msg,
+                "Too big: %d bytes, slot holds %u.\nConvert it first - see readme.txt",
+                (int)st.st_size, cfg->capacity);
+        goto done;
+    }
+
+    data = malloc(st.st_size);
     in = fopen(name, "rb");
-    if (!file_data || !in || fread(file_data, st.st_size, 1, in) != 1) {
-        strcpy(result_msg, "Could not read source image");
+    if (!data || !in || fread(data, st.st_size, 1, in) != 1) {
+        strcpy(result_msg, "Could not read that file");
         goto done;
     }
     fclose(in); in = 0;
 
-    if (st.st_size >= 6 && file_data[0] == 'G' && file_data[1] == 'I' && file_data[2] == 'F') {
-        strcpy(result_msg, "GIF boot animations are no longer supported");
+    if (!boot_ready_jpeg(data, (unsigned)st.st_size, why)) {
+        sprintf(result_msg, "%s: %s.\nConvert it first - see readme.txt",
+                base_name(name), why);
         goto done;
     }
 
-    {
-        cam_meminfo mi;
-        GetMemInfo(&mi);
-        boot_alloc_used = 0;
-        // Keep room for the 320x240 RGB resize buffer, encoded JPEG and UI.
-        boot_alloc_limit = (mi.free_block_max_size > 320*1024) ?
-                           mi.free_block_max_size - 320*1024 : 0;
-    }
-    if (boot_alloc_limit > 4*1024*1024) boot_alloc_limit = 4*1024*1024;
-    if (boot_alloc_limit < 128*1024) {
-        strcpy(result_msg, "Not enough memory to import safely");
-        goto done;
-    }
-
-    decoded = stbi_load_from_memory(file_data, st.st_size, &w, &h, &comp, 3);
-    comp = 3;
-    if (!decoded || w < 1 || h < 1) {
-        strcpy(result_msg, "Unsupported or damaged JPG/PNG");
-        goto done;
-    }
-    rgb = malloc(BOOT_SCREEN_WIDTH * BOOT_SCREEN_HEIGHT * 3);
-    jpg = malloc(BOOT_SCREEN_MAX_JPEG);
-    if (!rgb || !jpg) {
-        strcpy(result_msg, "Not enough free camera memory");
-        goto done;
-    }
-
-    draw_progress_bar("Import boot screen", 25);
-    resize_contain(decoded, w, h, comp, rgb);
-    jpg_size = encode_frame(rgb, jpg);
-    if (!jpg_size) {
-        strcpy(result_msg, "Image is too detailed for A480 boot JPEG");
+    draw_progress_bar("Import boot screen", 50);
+    if (!install_early_jpeg(data, (unsigned)st.st_size, cfg->capacity)) {
+        strcpy(result_msg, "Could not update DISKBOOT.BIN - boot file unchanged");
         goto done;
     }
     draw_progress_bar("Import boot screen", 100);
-    if (!install_early_jpeg(jpg, jpg_size)) {
-        strcpy(result_msg, "Could not update DISKBOOT.BIN");
-        goto done;
-    }
-    sprintf(result_msg, "Installed for next boot:\n%s", base_name(name));
+    sprintf(result_msg, "Installed for next boot:\n%s (%d bytes)",
+            base_name(name), (int)st.st_size);
     ok = 1;
 done:
     if (in) fclose(in);
-    if (file_data) free(file_data);
-    if (decoded) stbi_image_free(decoded);
-    if (rgb) free(rgb);
-    if (jpg) free(jpg);
+    if (data) free(data);
     return ok;
 }
 

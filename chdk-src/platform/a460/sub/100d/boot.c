@@ -16,7 +16,7 @@ void boot();
 //-------------------------------------------------------------------
 // Custom startup image - see BOOTSCREEN_PORTING.md.
 //
-// Values traced in the A460 100d firmware:
+// Values traced in PRIMARY_a460_100d.BIN:
 //
 //   stock JPEG   0xffe61674, 18426 bytes, 320x240 - byte identical to the
 //                a470's and a480's, so boot_image.h transfers unchanged
@@ -41,6 +41,24 @@ void boot();
 #define MYCAM_TABLE  0x0006e088
 
 #include "boot_image.h"
+
+// The startup sound, embedded exactly as the A480 embeds its own. It cannot
+// come off the card: Canon plays entry 1 long before the filesystem is up, so
+// anything loaded by platform_load_custom_sounds() is necessarily late and the
+// best it can do is play a second clip after the stock one has already been
+// heard. That is the "stock, then ours" this replaces.
+//
+// Entry 1's buffer is 11111 bytes on this body - read out of the init at
+// 0xffe68b0c, which writes the five stock sizes at a 16 byte stride:
+// 18426 / 11111 / 3244 / 3300 / 16415, the same set the A540 carries by name.
+// So the ceiling here is a whole second, and the clip is well inside it; the
+// size check below is what enforces that rather than this comment.
+#include "boot_sound.h"
+
+// Read by platform/a460/wrappers.c, which plays the same clip through the
+// shutter slot as a fallback. Set once this has actually written entry 1, so
+// the fallback does not then play it a second time.
+volatile int a460_boot_sound_patched;
 
 // Readable after the fact if module loading is ever fixed enough for Lua peek():
 //   [0] hook entry count   [1] buffer pointer   [2] first two buffer bytes
@@ -85,8 +103,46 @@ void patch_startup_image(void)
     // camera does not boot".
     if (buf[0] != 0xFF || buf[1] != 0xD8) return;
 
-    for (i = 0; i < (int)sizeof(boot_image_jpeg); i++)
-        buf[i] = boot_image_jpeg[i];
+    // The image now comes from a marker-tagged slot rather than a bare array,
+    // so that modules/boot_image.c can replace it inside DISKBOOT.BIN and
+    // Settings -> Boot screen works on this body too. The compiled-in default
+    // is the same picture this port has always drawn.
+    if (!BOOT_IMAGE_SLOT_VALID(boot_image_slot, BOOT_TAG_A460)) return;
+
+    // Copy the image, then pad the rest of Canon's buffer with 0xff exactly as
+    // the generated header used to be padded, so the bytes landing in the
+    // buffer are identical to what this port wrote before the slot existed.
+    for (i = 0; i < (int)boot_image_slot.size; i++)
+        buf[i] = boot_image_slot.jpeg[i];
+    for (; i < (int)boot_image_slot.capacity; i++)
+        buf[i] = 0xff;
+
+    // Entry 1 is Canon's startup sound, and this is the only place on this body
+    // early enough to replace it. Reaching here means the init has already run
+    // and copied the ROM assets in - entry 0 is holding a JPEG, and entry 1 is
+    // filled by the same straight-line function a few instructions later - so
+    // there is no ordering hazard and nothing of Canon's left to overwrite ours.
+    //
+    // Overwrite the buffer, never repoint it. That is the discipline this file
+    // already uses for the image above, and it is also what the A480's verified
+    // path does for this exact entry: Canon's startup player ignores a
+    // replacement table pointer.
+    {
+        unsigned char *sbuf = *(unsigned char **)(MYCAM_TABLE + 16);
+        unsigned ssize = *(unsigned *)(MYCAM_TABLE + 20);
+
+        if (sbuf && ssize >= sizeof(boot_sound_wav))
+        {
+            unsigned k;
+            for (k = 0; k < sizeof(boot_sound_wav); k++)
+                sbuf[k] = boot_sound_wav[k];
+            // The 16 byte entries on this body are {buffer, size} and the
+            // getter does not rewrite the size from flash - unlike the A430's
+            // and A540's - so shortening the clip here is honoured.
+            *(unsigned *)(MYCAM_TABLE + 20) = sizeof(boot_sound_wav);
+            a460_boot_sound_patched = 1;
+        }
+    }
 
     done = 1;
     chdk_startup_probe[3] = 1;

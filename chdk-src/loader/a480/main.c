@@ -7,20 +7,14 @@ extern long *blob_chdk_core;
 // extern long *blob_copy_and_reset;
 extern long blob_chdk_core_size;
 
-#define EARLY_BOOT_IMAGE_SIZE 18426
-typedef struct {
-    unsigned marker[4];
-    unsigned size;
-    unsigned char jpeg[EARLY_BOOT_IMAGE_SIZE];
-} early_boot_slot_t;
-
-// Uncompressed loader data: the running importer can locate and patch this
-// marker directly in dancing-bits encoded DISKBOOT.BIN.
-static volatile early_boot_slot_t early_boot_slot = {
-    { 0x544f4f42, 0x544f4c53, 0x30383441, 0x31474d49 },
-    0,
-    { [0 ... EARLY_BOOT_IMAGE_SIZE-1] = 0xa5 }
-};
+// The boot screen is no longer carried here. It lives in the core
+// (platform/a480/sub/100b/boot_image.h) and is read directly by the
+// replacement StartupImage task, the same way the A430, A460 and A470 do it.
+//
+// It used to be staged: this file held the image and copied it to 0x002fb000
+// for that task to collect. The address sat inside AgentRAM, and once the core
+// grew past it the staged image was destroyed by CHDK zeroing its own .bss
+// before the task ran. See platform/a480/sub/100b/boot.c.
 // extern long blob_copy_and_reset_size;
 
 void __attribute__((noreturn)) my_restart() {
@@ -32,17 +26,6 @@ void __attribute__((noreturn)) my_restart() {
     long length = (blob_chdk_core_size + 3) >> 2;
 
   core_copy(src, dst, length);
-
-    // Preserve the patched slot beyond the loader lifetime. This address is
-    // above the decompressed core and below the end of the A480 AgentRAM area;
-    // the startup-image task consumes it before CHDK creates the remaining
-    // AgentRAM heap.
-    {
-        const long *slot_src = (const long *)&early_boot_slot;
-        long *slot_dst = (long *)0x002fb000;
-        long slot_words = (sizeof(early_boot_slot) + 3) >> 2;
-        core_copy(slot_src, slot_dst, slot_words);
-    }
 
     }
 

@@ -39,7 +39,7 @@ void *vid_get_viewport_fb_d()
 // inside the raw hook with the imaging pipeline stopped, so what it holds is
 // the previous shot's compressed data.
 //
-// From the imaging buffer table recovered from the firmware, and worth stating
+// From the imaging buffer table tools/newport.py recovers, and worth stating
 // why it is trusted rather than just found. Three things agree:
 //
 //   CRAW_BUFF from the same table is 0x10f06b20, which is the address

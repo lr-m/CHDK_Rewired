@@ -84,12 +84,24 @@ void CreateTask_spytask() {
 #define MYCAM_IMAGE_SIZE 18426
 #include "boot_sound.h"
 
-typedef struct {
-    unsigned marker[4];
-    unsigned size;
-    unsigned char jpeg[MYCAM_IMAGE_SIZE];
-} early_boot_slot_t;
-#define EARLY_BOOT_RAM ((volatile early_boot_slot_t *)0x002fb000)
+// The boot screen, compiled into the core exactly as the A430, A460 and A470
+// carry theirs. See tools/mkbootslot.py.
+//
+// This used to be staged in RAM instead: the loader parked a copy at 0x002fb000
+// and this task collected it later. That address had to survive from loader-exit
+// to here, and it sat in the same AgentRAM the core is loaded into - safe only
+// while the core ended below it. It did once. As features were added the core
+// grew past it, the staged image landed inside .bss, CHDK zeroed its own boot
+// screen before this task ran, and the camera drew Canon's logo again - then a
+// black screen, once the slot carried a real image whose header survived while
+// its body did not. Nothing in this file changed; the core grew underneath it.
+//
+// Reading it out of the core removes the address, the race and the failure mode
+// together. The cost is core budget, and AgentRAM is only 204800 bytes here -
+// which is why core/raw.c now takes its 8192-byte bend LUT from the heap, and
+// why this image is encoded to fit 6144 bytes rather than the 18426 Canon
+// declares for its own.
+#include "boot_image.h" 
 
 static void boot_copy_asset(unsigned char *dst, int capacity,
                             const volatile unsigned char *src, int size)
@@ -121,19 +133,15 @@ void my_startup_image_task()
     image_buf = *(unsigned char **)(MYCAM_TABLE);
     sound_buf = *(unsigned char **)(MYCAM_TABLE + 16);
     sound_size = *(unsigned *)(MYCAM_TABLE + 20);
-    if (EARLY_BOOT_RAM->marker[0] == 0x544f4f42 &&
-        EARLY_BOOT_RAM->marker[1] == 0x544f4c53 &&
-        EARLY_BOOT_RAM->marker[2] == 0x30383441 &&
-        EARLY_BOOT_RAM->marker[3] == 0x31474d49 &&
-        EARLY_BOOT_RAM->size >= 4 && EARLY_BOOT_RAM->size <= MYCAM_IMAGE_SIZE &&
-        EARLY_BOOT_RAM->jpeg[0] == 0xff && EARLY_BOOT_RAM->jpeg[1] == 0xd8)
+    // On failure Canon's table is left exactly as its own init wrote it, so the
+    // stock logo draws. Writing a zero length here instead would hand the
+    // decoder an empty buffer.
+    if (BOOT_IMAGE_SLOT_VALID(boot_image_slot, BOOT_TAG_A480))
     {
         boot_copy_asset(image_buf, MYCAM_IMAGE_SIZE,
-                        EARLY_BOOT_RAM->jpeg, EARLY_BOOT_RAM->size);
-        *(unsigned *)(MYCAM_TABLE + 4) = EARLY_BOOT_RAM->size;
+                        boot_image_slot.jpeg, boot_image_slot.size);
+        *(unsigned *)(MYCAM_TABLE + 4) = boot_image_slot.size;
     }
-    else
-        *(unsigned *)(MYCAM_TABLE + 4) = 0;
 
     // Entry 1 is Canon's actual startup sound. Replacing it here, before the
     // original task runs, prevents the stock-then-custom double sound that a

@@ -76,9 +76,55 @@ int platform_load_custom_sounds(void)
         "A/CHDK/SOUNDS/selftimer.wav"   // entry 4 -> ID 4
     };
     unsigned loaded = 0;
+    unsigned char *startup_data;
+    int startup_size = 0;               // -1 = the boot hook already did this
     int i;
 
+    // The startup sound, played through the shutter slot - the fallback only.
+    //
+    // Entry 1 is Canon's own startup clip and it is now replaced in
+    // sub/100d/boot.c, from the task-creation hook, before Canon plays it. That
+    // is the only placement that can produce one sound instead of two: this
+    // function cannot run until the card is mounted, by which point the stock
+    // clip has already been heard, so playing ours here necessarily gives the
+    // "stock, then ours" the body was reported doing.
+    //
+    // Kept as a fallback because the early patch can decline - it refuses if
+    // Canon's buffer is smaller than the clip, and it never runs at all if the
+    // hook does not get a turn before the assets are drawn. a460_boot_sound_patched
+    // says which happened, so exactly one of the two routes ever makes a sound.
+    //
+    // The mechanism, when it is used: point the shutter slot at the clip for
+    // exactly one call. PT_PlaySound has parsed and queued the buffer before it
+    // returns, so restoring the slot immediately afterwards does not disturb
+    // the clip already in flight.
+    {
+        extern volatile int a460_boot_sound_patched;
+        if (a460_boot_sound_patched)
+            startup_size = -1;              // handled at boot; nothing to do here
+    }
+    startup_data = (startup_size == -1) ? 0 : (unsigned char *)load_file_to_length(
+        "A/CHDK/SOUNDS/startup.wav", &startup_size, 0, 256*1024);
+    if (!a460_valid_sound(startup_data, startup_size))
+    {
+        if (startup_data) free(startup_data);
+        startup_data = 0;
+    }
+
     A460_MYCAM_INIT();
+
+    if (startup_data)
+    {
+        unsigned *slot = &A460_MYCAM_TABLE[8];      // entry 2, the shutter
+        unsigned save_ptr = slot[0], save_size = slot[1];
+        slot[0] = (unsigned)startup_data;
+        slot[1] = (unsigned)startup_size;
+        _PT_PlaySound(0x2002, 0, 0);
+        slot[0] = save_ptr;
+        slot[1] = save_size;
+        loaded |= 1;
+    }
+
     for (i = 1; i < 4; i++)
     {
         int size = 0;

@@ -82,7 +82,7 @@
 // anything hand-derived from those two ROMs - the screen refresh gate, the boot
 // screen task hook, the a470's date prompt suppression. Those are DryOS
 // addresses and structures and would have to be walked again from
-// the A460 100d firmware.
+// PRIMARY_a460_100d.BIN.
 
     // Make the ALT button selectable. On this body the Print button is awkward
     // to reach, and Display is right next to the thumb. Same mechanism the a470
@@ -110,7 +110,7 @@
     // The JPEG bus is a dead entry, as on the A410 and A430 and unlike the
     // A470 and A480: this is a VxWorks build whose imaging-buffer logging
     // reads the addresses out of globals rather than a literal pool, so there
-    // is nothing to recover and no hook_jpeg_buffer()
+    // is nothing for tools/newport.py to recover and no hook_jpeg_buffer()
     // here. The generic weak one returns null and that one effect does
     // nothing. Every other effect is live.
     #define CAM_BEND_EXPERIMENTAL           1
@@ -134,7 +134,7 @@
     #define CAM_RECUI_UPDOWN_IS_ZOOM        1
 
     // SIZE and QUALITY, from the JPEG size estimator at 0xffd32420 recovered
-    // from the firmware:
+    // by tools/newport.py:
     //
     //   2563072 1428480 711680    <- 2592x1944, = CAM_JPEG_* above
     //   1640448  914432 455680    <- 2048x1536
@@ -167,10 +167,38 @@
     // canon_shoot_menu_active are both real RAM addresses on this port (0x2EE4
     // and 0xD504), where the a480 has the latter pinned to a ROM zero.
     #define CAM_PERSISTENT_OSD              1
+
+    // Canon's visible review ends well before its JPEG/card processing does on
+    // this body, and the spytask gate in core/main.c skips every gui_redraw()
+    // until that processing finishes. The overlay therefore stayed off screen
+    // for the whole save after each shot - seconds, and longer the heavier the
+    // bend, because the wait was the encode rather than a timer. Keep the UI
+    // serviced through the tail; the overlay's own ownership gates still decide
+    // what may be painted. Same fix, same reason, as the A470.
+    #define CAM_PERSISTENT_OSD_REDRAW_WHILE_PROCESSING 1
+
+    // Keeping the redraw call alive was only half of it. posd_screen_active()
+    // still gated the plates on recreview_hold's *level*, and that flag stays
+    // asserted through exactly the JPEG/card tail the redraw was restored for -
+    // so the overlay came back at the end of the save either way and the delay
+    // still grew with the bend. Hand the review to the shot-hold instead: the
+    // hide timer is the floor and the falling edge of the flag is the release,
+    // which is the moment the picture leaves the screen rather than the moment
+    // the card work behind it finishes.
+    #define CAM_PERSISTENT_OSD_TIMEOUT_OWNS_REVIEW 1
+    #define CAM_PERSISTENT_OSD_TRACK_REVIEW_EDGE   1
+
+    // The on-screen gate readout, off now that the post-shot stall is understood
+    // (bend_tag_service() blocking spytask inside Canon's JPEG write - see
+    // STATUS.md). The code stays in core/gui.c and core/raw.c: its L and Z
+    // columns are what finally distinguished "spytask is not painting" from
+    // "spytask is not running", and the a430 and a410 faults are still open.
+    // Define it again on whichever body is being chased.
+    // #define CAM_POSD_GATE_DEBUG          1
     #undef  CAM_OSD_REDRAW_MASK
     #define CAM_OSD_REDRAW_MASK             1   // 40ms, matching the other two
 
-    // Date/time screen suppression, traced in the A460 100d firmware. Same
+    // Date/time screen suppression, traced in PRIMARY_a460_100d.BIN. Same
     // mechanism as the a470, different addresses; the suppression itself is
     // generic code in core/main.c and needs only these two words.
     //
@@ -215,9 +243,21 @@
     // compile that out - see gui_init() - on the assumption that a body with
     // usable My Camera slots plays its own startup sound from them. This one
     // does not, and enabling the slots took its boot sound away.
-    #define CAM_CHDK_START_SOUND            1
+    // NOT enabled any more: CAM_CHDK_START_SOUND.
+    //
+    // It gave this body CHDK's own beep, because its ROM does not play a
+    // startup sound from the My Camera slots. platform/a460/wrappers.c now
+    // plays A/CHDK/SOUNDS/startup.wav through the shutter slot at gui_init,
+    // the same route the A470 uses, so the beep would double up with it.
+    // #define CAM_CHDK_START_SOUND         1
 
     #define CAM_STARTUP_IMAGE               1
+
+    // The boot screen is now a marker-tagged slot in the core image rather than
+    // a fixed array (sub/*/boot_image.h, tools/mkbootslot.py), so the on-camera
+    // importer can rewrite it inside DISKBOOT.BIN. This is what puts
+    // "Boot screen -> Import JPG/PNG" in CHDK Settings, as on the A480.
+    #define CAM_CUSTOM_BOOT_IMAGE           1
 
     // NOT enabled: CAM_HOLD_SCREEN_LOCK_IN_REC. Same reasoning as the a480 -
     // the overlay repaints only on change now, so Canon's repaint rate is not

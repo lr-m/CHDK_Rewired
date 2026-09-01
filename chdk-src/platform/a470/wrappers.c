@@ -10,16 +10,16 @@
 // the ROM and the stock buffers are left alone, and the loaded files stay
 // allocated for the rest of the boot.
 //
-// Both addresses were recovered from the firmware and then checked three
-// ways against the disassembly, because a wrong table base here is a pointer
+// Both addresses are from tools/newport.py and then checked three ways
+// against cameras/a470/ghidra/, because a wrong table base here is a pointer
 // written into arbitrary RAM:
 //
 //   FUN_ffc45d04 asserts through s_MyCamFunc_c_ffc45ee0, so it is MyCamFunc.c
 //   it guards on a flag and fills six entries of {buffer, size} at a 16 byte
 //     stride, which is the layout the A480 documents
 //   its table base literal, DAT_ffc45ef8, reads 0x00019434 out of the ROM
-//     image - the address recovered above - and the size it writes into
-//     entry 0 is 0x47fa, which is the startup JPEG size recovered above
+//     image - the address newport reported - and the size it writes into
+//     entry 0 is 0x47fa, which is the startup JPEG size newport reported
 //     separately
 //
 // On slot order, and on getting it wrong once. The init registers three

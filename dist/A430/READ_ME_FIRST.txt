@@ -78,8 +78,8 @@ If it ever freezes, pull the battery.
    The manual in the repository covers all of it.
 
 
-Build: a430 100b, Mon, 31 Aug 2026 13:31:54 +0100
-DISKBOOT.BIN md5 d3cd158f157a3a64501ab9ee18dfb72d
+Build: a430 100b, Wed, 02 Sep 2026 00:30:20 +0100
+DISKBOOT.BIN md5 7ccc3fc1b43986c62b44bfdcd459ec1c
 
 Frozen camera: pull the battery, no harm done. Nothing here is written
 to the camera itself, so taking the card out always gets you a stock

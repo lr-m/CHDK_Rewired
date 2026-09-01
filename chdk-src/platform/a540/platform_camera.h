@@ -68,7 +68,7 @@
     #define CAM_SD_OVER_IN_MF               1
 
 // ---- Rewired Optics ------------------------------------------------------
-// Derived from the A540 100b firmware (GM1.00B), CRC32 0x0625df56 over
+// Derived from PRIMARY_a540_100b.BIN (GM1.00B), CRC32 0x0625df56 over
 // 0xffc00000+0x2ff700 - matches firmware_crc_data.h, so the dump is genuine.
 
     #define CAM_BEND_MODE                   1
@@ -80,7 +80,7 @@
     //
     // As on the A410 and A430, the JPEG bus is a dead entry: this is a VxWorks
     // build with no "JPEG BUFF %p" logging and so no literal table for
-    // to recover the encoder's buffer from (profile todo
+    // tools/newport.py to recover the encoder's buffer from (profile todo
     // JPEG_BUFF). There is no hook_jpeg_buffer() here, the generic weak one
     // returns null, and that one effect does nothing. Every other effect is
     // live.
@@ -172,7 +172,7 @@
     #define CAM_RECUI_DRIVE_NAMES   { "SINGLE", "CONTINUOUS", "TIMER" }
 
     // SIZE and QUALITY, from the [resolution][quality] JPEG size estimator at
-    // 0xffd157a8, recovered from the firmware:
+    // 0xffd157a8, recovered by tools/newport.py:
     //
     //   2785280 1658880 798720   <- 2816x2112, = CAM_JPEG_* above
     //   2050048 1142784 569344   <- 2272x1704
@@ -209,7 +209,7 @@
 
     // No CAM_RECUI_FUNC_MENU_FLAG, and none is needed - same as the A480. SET
     // opens CHDK's own FUNC menu, so there is no Canon menu on the record
-    // screen to detect. (the detector lists it as a todo because it looks for a
+    // screen to detect. (newport.py lists it as a todo because it looks for a
     // RecFuncContainer show/hide pair; this ROM has FuncContainer.c but the
     // pair is moot once CHDK owns the menu.)
 
@@ -225,7 +225,7 @@
     // Firmware version specific - re-derive for any other A540 build.
     #define CAM_CLOCK_VALID_FLAG            0x2024
 
-    // The prompt gate, resolved in the disassembly rather than guessed:
+    // The prompt gate, resolved in Ghidra rather than guessed:
     //
     //   FUN_ffd7f9c0:  if (clock_valid() == 0) { DateTimeMenu(); *0x6b28 = 1; }
     //

@@ -15,8 +15,8 @@ void boot();
 // ---------------------------------------------------------------------------
 // Replacement startup image (Rewired Optics boot screen)
 //
-// Everything below was derived from the A540 100b firmware (GM1.00B) and its
-// disassembly. This body is structurally the A430's
+// Everything below was derived from PRIMARY_a540_100b.BIN (GM1.00B) via the
+// Ghidra export in cameras/a540/ghidra/. This body is structurally the A430's
 // case, not the A640's - see BOOTSCREEN_PORTING.md.
 //
 // The chain, from the task down to flash:

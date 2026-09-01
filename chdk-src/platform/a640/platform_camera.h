@@ -72,7 +72,7 @@
 //--------------------------------------------------
 // Circuit Bending - a640 100b
 //
-// Derived from the A640 100b firmware. That
+// Derived by tools/newport.py from PRIMARY_a640_100b.BIN (2026-08-19). That
 // dump is verified genuine: "GM1.00B" at 0xffc0a3a5 and a CRC32 over the first
 // 0x31bde0 bytes matching the 0xebd4230b in sub/100b/firmware_crc_data.h. The
 // detectors were re-validated against the a460/a470/a480 hand ports first, all
@@ -95,7 +95,7 @@
     //
     // As on the A410, A430 and A540, the JPEG bus is a dead entry: this is a
     // VxWorks build with no "JPEG BUFF %p" logging and so no literal table for
-    // to recover the encoder's buffer from (profile todo
+    // tools/newport.py to recover the encoder's buffer from (profile todo
     // JPEG_BUFF). There is no hook_jpeg_buffer() here, the generic weak one
     // returns null, and that one effect does nothing. Every other effect is
     // live.
@@ -156,7 +156,7 @@
     #define CAM_RECUI_DRIVE_NAMES   { "SINGLE", "CONTINUOUS", "TIMER" }
 
     // SIZE and QUALITY, from the [resolution][quality] JPEG size estimator at
-    // 0xffd224b4, recovered from the firmware:
+    // 0xffd224b4, recovered by tools/newport.py:
     //
     //   4198400 2519040 1198080  <- 3648x2736, = CAM_JPEG_* above
     //   2785280 1658880  798720  <- 2816x2112
@@ -185,7 +185,7 @@
 
     // No CAM_RECUI_FUNC_MENU_FLAG, and none is needed - same as the A480. SET
     // opens CHDK's own FUNC menu, so there is no Canon menu on the record
-    // screen to detect. (the detector lists it as a todo because it looks for a
+    // screen to detect. (newport.py lists it as a todo because it looks for a
     // RecFuncContainer show/hide pair; this ROM has FuncContainer.c but the
     // pair is moot once CHDK owns the menu.)
 
@@ -193,7 +193,7 @@
     #define CAM_OSD_REDRAW_MASK             1   // 40ms, matching the other three
 
     // Date/time screen suppression. Same mechanism as the a460/a470, addresses
-    // traced in the A640 100b firmware:
+    // traced in PRIMARY_a640_100b.BIN:
     //
     //   clock_is_valid() getter at 0xffc1b6dc returns *(0x00002010); the flag
     //   is written by the RTC module at 0xffc1b454. Polarity is VALID=1.

@@ -57,13 +57,25 @@ def resample(samples, source_rate):
     return bytes(out)
 
 
-def fit(pcm, max_bytes):
-    """Truncate to fit max_bytes of WAV file, fading the tail to silence.
+def fit(pcm, max_bytes, silence_threshold=4, preroll=64):
+    """Cut to fit max_bytes of WAV file, keeping the part that makes a sound.
 
-    Needed by the A540, whose slots are not repointed at our file but
+    Needed by the A430 and A540, whose slots are not repointed at our file but
     overwritten in place inside Canon's own buffer - so the ceiling is that
-    body's stock sound length, which for the shutter is 3244 bytes (0.29s).
-    See platform/a540/wrappers.c.
+    body's stock asset length, which for the shutter is 3244 bytes (0.29s).
+    See platform/a430/wrappers.c and platform/a540/wrappers.c.
+
+    This does NOT simply truncate. The card's button.wav carries 0.53s of
+    digital silence before the click actually starts, so cutting the first
+    0.30s of it produced a file that was 3300 bytes of pure 0x80 - a sound
+    slot that "worked" and played nothing. Head truncation is almost never
+    what you want for a sound with a leading gap, and there is no way to tell
+    from the file size that it went wrong.
+
+    So: find the audible span, drop the silence in front of it, and keep as
+    much from there as fits. When the audible part is itself longer than the
+    ceiling the attack is what survives, which is the right half of a shutter
+    or button click to keep.
 
     A hard cut leaves the waveform at whatever level it happened to reach, and
     against the 0x80 silence that follows it that step is a click - which on a
@@ -71,9 +83,24 @@ def fit(pcm, max_bytes):
     is ramped to 128 instead.
     """
     limit = max_bytes - 44
-    if limit < 1 or len(pcm) <= limit:
+    if limit < 1:
         return pcm
-    out = bytearray(pcm[:limit])
+
+    # The audible span, as offsets into pcm. 8-bit unsigned PCM silence is 128.
+    loud = [i for i, v in enumerate(pcm) if abs(v - 128) > silence_threshold]
+    if not loud:
+        return pcm[:limit] if len(pcm) > limit else pcm
+
+    start = max(0, loud[0] - preroll)
+    end = min(len(pcm), loud[-1] + 1)
+    if end - start <= limit:
+        # The whole sound fits once the leading silence is gone. Keep any
+        # trailing silence that still fits - it costs nothing and preserves
+        # the original spacing if the slot is longer than the sound.
+        end = min(len(pcm), start + limit)
+        return pcm[start:end]
+
+    out = bytearray(pcm[start:start + limit])
     fade = max(1, limit // 10)
     for i in range(fade):
         pos = limit - fade + i

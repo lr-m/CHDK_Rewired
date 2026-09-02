@@ -1,8 +1,8 @@
 CHDK Rewired - PowerShot A430
 firmware: 100b
 
-DISKBOOT.BIN md5 173b311faed14db48ea279e0a3067c8e
-PS.FIR       md5 f9fd804df348d68b91a95fa39ec1032a
+DISKBOOT.BIN md5 60d0b08449328fbf404ee05963cbf27f
+PS.FIR       md5 97474c53da0a65b4021ddf5e6a3e1ed9
 
 Bend mode, persistent OSD, record UI, custom sounds, custom boot screen.
 

@@ -105,6 +105,16 @@
     // and that one effect does nothing. Every other effect is live.
     #define CAM_BEND_EXPERIMENTAL           1
 
+    // Give the CPU back during the bend, as the A410 does and for the same
+    // reason: raw_process() runs in spytask, never blocks, and holds the
+    // processor for the length of the pass. On the A410 that timed the imaging
+    // path out into an E16; here the body switches off mid-shot instead,
+    // rarely - the same starvation without a message. See raw_service_ui() in
+    // core/raw.c: 10ms per 100ms of work, at the service points the engines
+    // already stop at.
+    #define CAM_BEND_YIELD_MS               10
+    #define CAM_BEND_YIELD_EVERY_MS         100
+
     // No separate zoom control - the up and down arrows are the zoom, as on
     // the A410 and the A470. So no CAM_BEND_ENTER_UP (UP belongs to the lens,
     // and the patchbay is entered by holding the ALT button) and no

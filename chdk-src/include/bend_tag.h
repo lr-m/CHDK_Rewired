@@ -21,13 +21,14 @@
 //     x bit slip 11 > row addr 3
 //     BSH1:<hex>     the exact bytes a sidecar holds
 //
-// Where it sits depends on how it got there. A body with the write-path hook
-// (CAM_BEND_TAG_INJECT) appends it past the EOI, as above; a body that rewrites
-// the file afterwards puts it between the SOI and the EXIF, which is the more
-// conventional place for a comment. Past the EOI is the safer of the two on the
-// hook path and the reason is in fwt_close(): the tag makes the file longer
-// than Canon believes it wrote, and only bytes after the EOI can be missed by a
-// short read without costing the picture. Both are found by bend_tag_read().
+// Past the EOI rather than up with the header, on every body, for two separate
+// reasons that happen to want the same thing. Where CHDK owns the write path
+// (CAM_BEND_TAG_INJECT) the tag makes the file longer than Canon believes it
+// wrote, and only bytes after the EOI can be missed by a short read without
+// costing the picture - see fwt_close(). Where it does not, the tag is appended
+// to the finished file from spytask, and appending is the only way to add to a
+// file without rewriting all of it - see bt_append(). One placement, one
+// reader, and a picture tagged on any of these bodies reads back on any other.
 //
 // Two readerships, one segment. Everything above the last line is for a person
 // - it shows up in any tool that displays a JPEG comment, and `strings` finds

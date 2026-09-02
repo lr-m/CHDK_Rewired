@@ -1,8 +1,8 @@
 CHDK Rewired - PowerShot A540
 firmware: 100b
 
-DISKBOOT.BIN md5 e2fbfc954e54b4bb9cffc4085fa08f84
-PS.FIR       md5 c8f0b6debbbeb72c1d6c04d7171328a1
+DISKBOOT.BIN md5 50719fe213d9a6304b5bc1ff6a30a0c8
+PS.FIR       md5 e171713b05365d130fd1bd4612657fbc
 
 Bend mode, persistent OSD, record UI, custom sounds. Custom boot screen is not enabled.
 

@@ -1,8 +1,8 @@
 CHDK Rewired - PowerShot A640
 firmware: 100b
 
-DISKBOOT.BIN md5 58a039587897d015228dc69d88c5ebcc
-PS.FIR       md5 5c39cd4b382cc25a160521782990e6ee
+DISKBOOT.BIN md5 0ae49758899b22e81583044263d29075
+PS.FIR       md5 b989ab7d9f11c58b641801420178b087
 
 Bend mode, persistent OSD, record UI. Custom boot screen is not enabled.
 

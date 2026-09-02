@@ -20,7 +20,6 @@
 
 #define BT_FIRST_MS     800         // before the first look
 #define BT_GIVEUP_MS    20000       // before a pending job is abandoned
-#define BT_COPY_BUF     8192        // rewrite chunk
 
 // Enough for the comment, which is fixed-shape text plus the hex record. The
 // record is a hundred-odd bytes and hex doubles it; the rest is six short
@@ -181,129 +180,124 @@ void bend_tag_queue(const char *dir, long num,
 // costs nothing but a stray .TMP.
 
 #ifndef CAM_BEND_TAG_INJECT
-static int bt_tmp_path(const char *jpg, char *out, int outlen)
-{
-    int len = (int)strlen(jpg);
-
-    if (len + 1 > outlen || len < 4) return 0;
-    strcpy(out, jpg);
-    strcpy(out + len - 4, ".TMP");
-    return 1;
-}
-
-// Is the file a complete JPEG that we have not already tagged? Returns 1 to go
-// ahead, 0 to wait, -1 to give up on it.
 // Two ways of getting the recipe into the picture, and which one a body uses is
 // decided by whether CHDK can see Canon's writes on it.
 //
 // CAM_BEND_TAG_INJECT - the good one. CHDK replaces Canon's file-write task, so
-// fwt_write() sees every chunk on its way to the card and the comment is
-// slipped in as the picture is written. One extra write of a few hundred bytes,
-// no delay, no temp file. Needs DryOS (fwt_write is inside #ifdef CAM_DRYOS)
-// *and* boot.c to actually install the replacement task: true on the a470 and
-// a480, false on every VxWorks body here.
+// fwt_close() appends the comment as the picture is finished. One extra write
+// of a few hundred bytes, inside the save Canon is already doing. Needs DryOS
+// (the fwt_ hooks are inside #ifdef CAM_DRYOS) *and* boot.c to actually install
+// the replacement task: true on the a470 and a480, false on every VxWorks body
+// here.
 //
 // Otherwise - the fallback below. Wait for the picture to be finished, then
-// copy it to a .TMP with the comment spliced in at the front and rename over
-// the original. Inserting at the front of a file means rewriting all of it:
-// 13.6MB of I/O for a 6.8MB frame, several seconds, and it runs in spytask so
-// it stalls everything CHDK draws for that long. That is the fault this whole
-// mechanism was rebuilt to avoid - it is kept only because on those bodies the
-// alternative is no tag at all.
+// open it and append the same segment. This runs in spytask, so what it costs
+// is what the display stalls for, which is why it is an append and not the
+// rewrite it used to be: putting the comment at the *front* means rewriting the
+// whole file, 13.6MB of I/O for a 6.8MB frame and several seconds of frozen
+// overlay. Appending is one open, one write of a few hundred bytes and one
+// close, whatever the picture weighs. Both paths therefore put the tag in the
+// same place - after the EOI - and bend_tag_read() has one way to find it.
+//
+// Is the file a complete JPEG that we have not already tagged?
 // 1 ready, 0 not yet, -1 already ours.
 static int bt_ready(const char *path)
 {
     unsigned char head[4];
-    int fd, ok = 0;
+    char *tail;
+    long size;
+    int fd, n, i, win, ok = 0;
 
     fd = open(path, O_RDONLY, 0777);
     if (fd < 0) return 0;                       // not written yet
 
-    if (read(fd, head, 2) == 2 && head[0] == 0xff && head[1] == 0xd8)
+    if (read(fd, head, 2) != 2 || head[0] != 0xff || head[1] != 0xd8)
     {
-        // Already ours? The next segment is a comment beginning with the mark.
-        if (read(fd, head, 2) == 2 && head[0] == 0xff && head[1] == 0xfe)
-        {
-            char mark[sizeof(BEND_TAG_MARK)];
-            if (read(fd, head, 2) == 2 &&
-                read(fd, mark, sizeof(mark) - 1) == (int)sizeof(mark) - 1)
-            {
-                mark[sizeof(mark) - 1] = 0;
-                if (strcmp(mark, BEND_TAG_MARK) == 0) { close(fd); return -1; }
-            }
-        }
-
-        // Finished? A closed JPEG ends FFD9. One still being written does not.
-        if (lseek(fd, -2, SEEK_END) >= 0 &&
-            read(fd, head, 2) == 2 && head[0] == 0xff && head[1] == 0xd9)
-            ok = 1;
+        close(fd);
+        return 0;
     }
+
+    // Finished? A closed, untagged JPEG ends FFD9. One still being written does
+    // not - and neither does one we have already tagged, since our segment goes
+    // after that EOI. So the cheap test answers the common case, and only when
+    // it fails do we pay for a look at the tail to tell those two apart.
+    if (lseek(fd, -2, SEEK_END) >= 0 &&
+        read(fd, head, 2) == 2 && head[0] == 0xff && head[1] == 0xd9)
+    {
+        close(fd);
+        return 1;
+    }
+
+    size = lseek(fd, 0, SEEK_END);
+    win  = BT_TEXT_MAX + 4;
+    if (size < (long)win) win = (int)size;
+    if (win < (int)sizeof(BEND_TAG_MARK) || lseek(fd, size - win, SEEK_SET) < 0)
+    {
+        close(fd);
+        return 0;
+    }
+
+    tail = malloc(win + 1);
+    if (!tail) { close(fd); return 0; }
+    n = read(fd, tail, win);
     close(fd);
+
+    if (n == win)
+    {
+        tail[win] = 0;
+        for (i = 0; i + (int)sizeof(BEND_TAG_MARK) - 1 <= win; i++)
+            if (strncmp(tail + i, BEND_TAG_MARK,
+                        sizeof(BEND_TAG_MARK) - 1) == 0)
+            {
+                ok = -1;                        // already ours
+                break;
+            }
+    }
+    free(tail);
     return ok;
 }
 
-static int bt_rewrite(const char *path, const char *text, int len)
+// The tag, appended after the picture's EOI.
+//
+// Nothing before the end of the file is touched, so there is no copy, no .TMP
+// and no rename: the photograph on the card is the one Canon wrote, with our
+// segment behind it. A decoder stops at the EOI and never reads this; anything
+// looking for the tag reads the tail (bend_tag_read).
+static int bt_append(const char *path, const char *text, int len)
 {
-    char tmp[BEND_TAG_PATHLEN];
     unsigned char hdr[4];
-    unsigned char *buf;
-    int src, dst, n, seg, ok = 0;
+    int fd, seg, ok;
 
     // A comment segment's length field covers itself.
     seg = len + 2;
     if (len <= 0 || seg > 0xfffd) return 0;
-    if (!bt_tmp_path(path, tmp, sizeof(tmp))) return 0;
 
-    buf = malloc(BT_COPY_BUF);
-    if (!buf) return 0;
+    fd = open(path, O_WRONLY, 0777);
+    if (fd < 0) return 0;
 
-    src = open(path, O_RDONLY, 0777);
-    if (src < 0) { free(buf); return 0; }
-    dst = open(tmp, O_WRONLY|O_CREAT|O_TRUNC, 0777);
-    if (dst < 0) { close(src); free(buf); return 0; }
+    if (lseek(fd, 0, SEEK_END) < 0) { close(fd); return 0; }
 
-    hdr[0] = 0xff; hdr[1] = 0xd8;               // SOI
-    hdr[2] = 0xff; hdr[3] = 0xfe;               // COM
-    ok = (write(dst, hdr, 4) == 4);
+    hdr[0] = 0xff; hdr[1] = 0xfe;               // COM
+    hdr[2] = (unsigned char)((seg >> 8) & 0xff);
+    hdr[3] = (unsigned char)(seg & 0xff);
 
-    hdr[0] = (unsigned char)((seg >> 8) & 0xff);
-    hdr[1] = (unsigned char)(seg & 0xff);
-    ok = ok && (write(dst, hdr, 2) == 2)
-            && (write(dst, text, len) == len);
+    ok = (write(fd, hdr, 4) == 4) && (write(fd, text, len) == len);
+    close(fd);
 
-    // Everything after the original's SOI, unchanged.
-    if (ok && lseek(src, 2, SEEK_SET) >= 0)
-    {
-        while ((n = read(src, buf, BT_COPY_BUF)) > 0)
-            if (write(dst, buf, n) != n) { ok = 0; break; }
-        if (n < 0) ok = 0;
-    }
-    else
-        ok = 0;
-
-    close(dst);
-    close(src);
-    free(buf);
-
-    if (!ok) { remove(tmp); return 0; }
-
-    // Only now is the picture touched, and only by having the tagged copy put
-    // in its place.
-    remove(path);
-    if (rename(tmp, path) != 0) return 0;
-    return 1;
+    // A short write leaves trailing bytes that carry no mark, which reads back
+    // the same as an untagged picture. The picture itself was never opened for
+    // anything but appending, so it cannot have been damaged.
+    return ok;
 }
 
 #endif // !CAM_BEND_TAG_INJECT
 
 // Written into the picture as Canon writes it, not afterwards.
 //
-// **What this replaces, and why.** The tag is a JPEG comment segment. On the
-// bodies that rewrite the file it goes directly after the SOI, at the very
-// front; here it is appended after the EOI instead, for the reason set out in
-// fwt_close(). Either way a filesystem cannot insert into the middle of a file
-// - only overwrite or append - so putting ~500 bytes at the front used to mean
-// writing a whole new copy of the picture:
+// **What this replaces, and why.** The tag is a JPEG comment segment appended
+// after the EOI. It used to go in at the front, after the SOI, and a filesystem
+// cannot insert into the middle of a file - only overwrite or append - so
+// putting ~500 bytes there meant writing a whole new copy of the picture:
 // 13.6MB of I/O and 1734 calls through Canon's FIO for a 6.8MB frame, several
 // seconds, scaling with picture size. Worse, it ran in spytask, which is the
 // task that draws, so it also cost the overlay for its duration; and being
@@ -405,9 +399,9 @@ void bend_tag_service(void)
 
 #else
 
-// The fallback: poll, then rewrite. See the note above bt_ready(). This blocks
-// spytask inside Canon's write and stalls the display for the length of the
-// save; it is here because on these bodies there is no write to hook.
+// The fallback: poll, then append. See the note above bt_ready(). The append
+// itself is a few hundred bytes and returns immediately; what this still costs
+// spytask is the poll, which is why it does not start until BT_FIRST_MS.
 void bend_tag_service(void)
 {
     int t;
@@ -420,7 +414,7 @@ void bend_tag_service(void)
     switch (bt_ready(bt_path))
     {
     case 1:
-        bt_rewrite(bt_path, bt_text, bt_len);
+        bt_append(bt_path, bt_text, bt_len);
         bt_pending = 0;
         break;
     case -1:
@@ -450,7 +444,6 @@ int bend_tag_read(const char *picture,
                   bendx_chain_t *c, int *bendx_on,
                   bend_segs_t *s)
 {
-#ifdef CAM_BEND_TAG_INJECT
     unsigned char rec[BEND_SHOT_REC_MAX];
     char *text, *mark;
     long size;
@@ -461,11 +454,11 @@ int bend_tag_read(const char *picture,
     fd = open(picture, O_RDONLY, 0777);
     if (fd < 0) return 0;
 
-    // The tag is appended past the EOI rather than inserted after the SOI - see
-    // fwt_close() in platform/generic/filewrite.c for why - so it is read from
-    // the tail. One read of at most a kilobyte, not a scan of the file: the tag
-    // is the last thing written, so it is inside the last segment-sized window
-    // or it is not there at all.
+    // The tag sits past the EOI on every body - appended by fwt_close() where
+    // CHDK owns the write path, and by bt_append() where it does not - so it is
+    // read from the tail. One read of at most a kilobyte, not a scan of the
+    // file: the tag is the last thing written, so it is inside the last
+    // segment-sized window or it is not there at all.
     size = lseek(fd, 0, SEEK_END);
     seg  = BT_TEXT_MAX + 4;
     if (size < (long)seg) seg = (int)size;
@@ -518,61 +511,4 @@ int bend_tag_read(const char *picture,
     free(text);
     (void)i;
     return ok;
-#else
-    // Bodies without the write-path hook still rewrite the file to put the
-    // comment after the SOI (bt_rewrite above), which is where a JPEG comment
-    // belongs and where this reads it. Only the segment we write ourselves, in
-    // the position we write it: a scan of the whole header for any comment
-    // would also find Canon's.
-    unsigned char head[4];
-    unsigned char rec[BEND_SHOT_REC_MAX];
-    char *text;
-    int fd, seg, n, i, at, ok = 0;
-
-    if (!picture) return 0;
-
-    fd = open(picture, O_RDONLY, 0777);
-    if (fd < 0) return 0;
-
-    if (read(fd, head, 2) != 2 || head[0] != 0xff || head[1] != 0xd8 ||
-        read(fd, head, 2) != 2 || head[0] != 0xff || head[1] != 0xfe ||
-        read(fd, head, 2) != 2)
-    {
-        close(fd);
-        return 0;
-    }
-
-    seg = ((int)head[0] << 8) | head[1];
-    if (seg < 3 || seg > BT_TEXT_MAX + 2) { close(fd); return 0; }
-    seg -= 2;
-
-    text = malloc(seg + 1);
-    if (!text) { close(fd); return 0; }
-    n = read(fd, text, seg);
-    close(fd);
-
-    if (n == seg)
-    {
-        text[seg] = 0;
-        if (strncmp(text, BEND_TAG_MARK, sizeof(BEND_TAG_MARK) - 1) == 0)
-        {
-            char *p = strstr(text, "BSH1:");
-            if (p)
-            {
-                p += 5;
-                for (at = 0; at < (int)sizeof(rec); at++)
-                {
-                    int hi = bt_unhex(p[at * 2]);
-                    int lo = (hi >= 0) ? bt_unhex(p[at * 2 + 1]) : -1;
-                    if (lo < 0) break;
-                    rec[at] = (unsigned char)((hi << 4) | lo);
-                }
-                ok = bend_shot_unpack(rec, at, b, bend_on, c, bendx_on, s);
-            }
-        }
-    }
-    free(text);
-    (void)i;
-    return ok;
-#endif
 }

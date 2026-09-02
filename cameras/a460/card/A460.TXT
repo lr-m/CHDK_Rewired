@@ -1,8 +1,8 @@
 CHDK Rewired - PowerShot A460
 firmware: 100d
 
-DISKBOOT.BIN md5 f822464a8bd94c239ce50fd53555bdcf
-PS.FIR       md5 625899486a32984593dd99d6e8320175
+DISKBOOT.BIN md5 b3df6ac1a062104c2e8c319c0ed3e0d0
+PS.FIR       md5 ac9591af315e8aa57f2bc0cd4f9ca324
 
 Bend mode, persistent OSD, record UI, custom sounds, custom boot screen.
 

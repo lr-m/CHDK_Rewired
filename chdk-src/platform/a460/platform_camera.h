@@ -188,6 +188,23 @@
     #define CAM_PERSISTENT_OSD_TIMEOUT_OWNS_REVIEW 1
     #define CAM_PERSISTENT_OSD_TRACK_REVIEW_EDGE   1
 
+    // "A review is on screen", reversed out of this ROM for the same reason as
+    // the A470's: recreview_hold is not that flag on this firmware either, so
+    // without this the only thing between the shutter and the plates is the
+    // hide timer - and the Bend UI, which asks posd_review_active() directly
+    // (core/gui_bend.c), gets an answer that has nothing to do with the review.
+    // The overlay was drawn over the reviewed photograph.
+    //
+    // 0x2444 is the state field. Written in exactly two places in the whole
+    // image: set to 1 beside the _EntryActionReview log (0xffc18390, which
+    // returns early if it is already 1) and cleared to 0 in _ExitActionReview
+    // (0xffc183ec, which returns early if it is already 0). The only other
+    // reference, at 0xffc1adec, reads it as a state guard. Same shape as the
+    // A470's 0x5b4c, found the same way.
+    //
+    // Firmware-specific. This number is for 100d and nothing else.
+    #define CAM_REVIEW_ACTIVE_FLAG          0x2444
+
     // The on-screen gate readout, off now that the post-shot stall is understood
     // (bend_tag_service() blocking spytask inside Canon's JPEG write - see
     // STATUS.md). The code stays in core/gui.c and core/raw.c: its L and Z

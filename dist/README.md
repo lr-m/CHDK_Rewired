@@ -10,13 +10,13 @@ card-flashing scripts, a READ_ME_FIRST, loose
 
 | Package | Firmware | Built | Card zip |
 |---|---|---|---|
-| [A410](A410/) | 100e | Wed, 02 Sep 2026 00:29:21 +0100 | `CHDK-A410-100e-card.zip` |
-| [A430](A430/) | 100b | Wed, 02 Sep 2026 00:30:20 +0100 | `CHDK-A430-100b-card.zip` |
-| [A460](A460/) | 100d | Wed, 02 Sep 2026 00:31:19 +0100 | `CHDK-A460-100d-card.zip` |
-| [A470](A470/) | 102c | Wed, 02 Sep 2026 00:53:50 +0100 | `CHDK-A470-102c-card.zip` |
-| [A480](A480/) | 100b | Wed, 02 Sep 2026 00:54:50 +0100 | `CHDK-A480-100b-card.zip` |
-| [A540](A540/) | 100b | Wed, 02 Sep 2026 00:32:18 +0100 | `CHDK-A540-100b-card.zip` |
-| [A640](A640/) | 100b | Wed, 02 Sep 2026 00:33:17 +0100 | `CHDK-A640-100b-card.zip` |
+| [A410](A410/) | 100e | Wed, 02 Sep 2026 01:10:18 +0100 | `CHDK-A410-100e-card.zip` |
+| [A430](A430/) | 100b | Wed, 02 Sep 2026 01:11:18 +0100 | `CHDK-A430-100b-card.zip` |
+| [A460](A460/) | 100d | Wed, 02 Sep 2026 01:34:57 +0100 | `CHDK-A460-100d-card.zip` |
+| [A470](A470/) | 102c | Wed, 02 Sep 2026 01:13:18 +0100 | `CHDK-A470-102c-card.zip` |
+| [A480](A480/) | 100b | Wed, 02 Sep 2026 01:14:18 +0100 | `CHDK-A480-100b-card.zip` |
+| [A540](A540/) | 100b | Wed, 02 Sep 2026 01:15:17 +0100 | `CHDK-A540-100b-card.zip` |
+| [A640](A640/) | 100b | Wed, 02 Sep 2026 01:16:17 +0100 | `CHDK-A640-100b-card.zip` |
 
 **No Game Boy ROMs are included.** `CHDK/GBC/` ships empty with a note in
 it - put your own `.gb`/`.gbc` files there.

@@ -231,6 +231,12 @@
     // not having the function at all.
     #undef  CAM_POSD_SERVICE_UI_IN_CAPTURE
 
+    // Milliseconds the bend engines give the CPU back at each service point.
+    // Off by default: on the bodies that need nothing, an unconditional sleep
+    // would only make every bend longer.
+    #undef  CAM_BEND_YIELD_MS
+    #undef  CAM_BEND_YIELD_EVERY_MS
+
     // Bring the overlay back on the falling edge of Canon's review flag rather
     // than on the CAM_PERSISTENT_OSD_SHOT_HIDE_MS timer. Consumed by
     // posd_shot_hold() in core/gui.c.

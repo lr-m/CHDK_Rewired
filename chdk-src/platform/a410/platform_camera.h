@@ -138,6 +138,31 @@
     // Not tested on hardware yet.
     #define CAM_BEND_EXPERIMENTAL           1
 
+    // This body answers a bent shot with a sporadic E16, and its own ErrMap.c
+    // table (0xffd31ac0) reads error 16 as ImageTimeOut / CcdFifo / CcdShifter
+    // / AfShifter - the imaging path, not memory, which would be 0x17.
+    //
+    // The first suspect was the raw buffer's contents. Canon keeps its three
+    // display buffers inside the raw span (the table at 0xffe8dab4 holds
+    // 0x105eaf80, 0x10671f80 and 0x106f8f80, spaced 0x87000, against a raw
+    // buffer of 0x10570ff0..0x1096db30 built at 0xffca81cc), and 0x1077ff80 -
+    // the first address past them - is a pool bound in the ExMemMan.c table at
+    // 0xffc01cd8. So a full-frame bend does write over Canon's own memory.
+    //
+    // But that is not what the E16 is. Protecting the display band made it
+    // rarer; protecting everything above row 186 - writing 12% of the frame,
+    // touching neither the buffers nor the pool - made it rarer still and did
+    // not stop it. What tracked the fault both times was how much work the
+    // pass did, not which addresses it touched.
+    //
+    // So give the CPU back instead. raw_process() runs in spytask and holds it
+    // for the whole bend; the imaging path this error comes from has to run in
+    // that time. See raw_service_ui() in core/raw.c - the service points are
+    // already there, at every 64th row and between bendx profiles, and this
+    // sleeps at each one.
+    #define CAM_BEND_YIELD_MS               10
+    #define CAM_BEND_YIELD_EVERY_MS         100
+
     // The record-screen selectors, drawn by CHDK. Propset 1 maps derived from
     // cameras/a410/ghidra/ - see the CAM_PROPSET == 1 block in core/gui_recui.c
     // for what each value rests on.

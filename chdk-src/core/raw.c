@@ -621,6 +621,32 @@ static int raw_ui_last;
 
 static void raw_service_ui(void)
 {
+#ifdef CAM_BEND_YIELD_MS
+    // Hand the CPU back, whatever this body does about the overlay.
+    //
+    // The bend runs in spytask and never blocks, so on a body where spytask is
+    // not below Canon's imaging tasks it holds the processor for the length of
+    // the pass - seconds - and the capture path times out behind it.
+    //
+    // Throttled by the clock rather than taken at every service point. The
+    // points are every 64th row, but there is one pass per segment and another
+    // per bendx profile, so a chain over a segmented frame reaches this a few
+    // hundred times; sleeping at each one turned a bend into something you wait
+    // through. A sleep is also not the length it asks for - it is the length it
+    // asks for plus however long it takes spytask to be scheduled again - so
+    // the only way to bound the cost is to bound how often it happens.
+    // CAM_BEND_YIELD_MS per CAM_BEND_YIELD_EVERY_MS of work is the ceiling,
+    // whatever the engines above do.
+    {
+        static int yield_last;
+        int yt = get_tick_count();
+        if (!yield_last || (unsigned)(yt - yield_last) >= CAM_BEND_YIELD_EVERY_MS)
+        {
+            yield_last = yt;
+            msleep(CAM_BEND_YIELD_MS);
+        }
+    }
+#endif
 #ifndef CAM_POSD_SERVICE_UI_IN_CAPTURE
     // Off unless the port asks for it - see camera.h. Repainting during capture
     // puts the overlay back on a screen Canon is about to freeze for the review

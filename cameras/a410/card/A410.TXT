@@ -1,8 +1,8 @@
 CHDK Rewired - PowerShot A410
 firmware: 100e
 
-DISKBOOT.BIN md5 8b78cdfcebba93c9803bf5660e56e62b
-PS.FIR       md5 851255173d6a967b3a05de706b5aaa5f
+DISKBOOT.BIN md5 6eef7aa1a016691fb859edbe12e3c7a0
+PS.FIR       md5 d62e4b4ee3a8c4c2d60a66cd370c940a
 
 Bend mode, persistent OSD, record UI. No custom boot screen - this ROM has no startup image to replace.
 

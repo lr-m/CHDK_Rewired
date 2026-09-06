@@ -46,7 +46,7 @@ On top of everything stock CHDK already does:
 
 | Camera | Firmware | Bend matrix | Persistent OSD | Record UI | Custom sounds | Boot screen |
 |---|---|:---:|:---:|:---:|:---:|:---:|
-| PowerShot A410 | 100e | ✅ | ✅ | ✅ | ❌ | ❌ ¹ |
+| PowerShot A410 ⚠️ | 100e | ✅ | ✅ | ✅ | ❌ | ❌ ¹ |
 | PowerShot A430 | 100b | ✅ | ✅ | ✅ | ✅ | ✅ |
 | PowerShot A460 | 100d | ✅ | ✅ | ✅ | ✅ | ✅ |
 | PowerShot A470 | 102c | ✅ | ✅ | ✅ | ✅ | ✅ |
@@ -56,6 +56,37 @@ On top of everything stock CHDK already does:
 
 ¹ This ROM carries no startup image to replace.
 ² With a boot animation.
+
+> ### ⚠️ The A410 is not stable
+>
+> Read this before installing it on an A410. Every other camera in the table
+> is stable; this one is not.
+>
+> With this software loaded, the A410 **intermittently shuts down with an E16
+> error**. It can happen on the shutter press or on taking a picture, and
+> sometimes the live view comes up black on power-on and the camera dies on the
+> next press. Most of the time it just works, which is the annoying part — it
+> is unpredictable rather than constant.
+>
+> It is a shutdown, not damage. Nothing here writes to the camera's firmware:
+> pull the card and you have a stock A410 back. A stock A410 does not show this
+> fault, so it is caused by running this software.
+>
+> The cause is understood but not fixed. Canon's own error reporter says the
+> fault is a **sensor FIFO overrun** — the image data path not being serviced
+> in time. It was tracked down by instrumenting the camera's error recorder,
+> and seven separate changes were tried and tested on the camera without
+> curing it, including disabling the bend engine, the overlay, and eventually
+> the whole capture-sequence hook. It is not any one feature: it happens with
+> the software merely resident. The A410 is the oldest and slowest body
+> supported here, and a tired sensor that copes on its own but not with
+> anything else competing fits the evidence just as well as a software cause.
+>
+> **It ships anyway**, on the theory that an A410 in a drawer is worth playing
+> with even if it falls over now and then, and that someone else's camera may
+> behave differently from the one this was tested on. If you have one, try it —
+> just don't rely on it, and expect to power-cycle. If yours turns out to be
+> solid, or if you find the cause, that is worth knowing.
 
 Multiple exposure, segments, presets, sidecar tagging, the Game Boy player,
 themes and grids are available on every camera in the table.
@@ -102,7 +133,7 @@ firmware `100b`; `1.02C` means `102c`. Compare it with your camera's row:
 
 | Camera | Screen shows | You need the package |
 |---|---|---|
-| A410 | `1.00E` | `dist/A410` |
+| A410 ⚠️ unstable | `1.00E` | `dist/A410` |
 | A430 | `1.00B` | `dist/A430` |
 | A460 | `1.00D` | `dist/A460` |
 | A470 | `1.02C` | `dist/A470` |

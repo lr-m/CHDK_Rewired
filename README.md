@@ -67,7 +67,7 @@ This section assumes you have never used a terminal. Follow it in order and you 
 
 You will need:
 
-* **An SD card of 2 GB or smaller.** This is not a suggestion. Anything larger than 2 GB is an SDHC card, and these cameras cannot read SDHC at all, so the card will not work no matter what you put on it. Old 512 MB, 1 GB and 2 GB cards are cheap and plentiful.
+* **An SD card, 2 GB recommended.** 2 GB and under is the safe choice and what these cameras were sold alongside; such cards are cheap and plentiful. Larger cards often work too, so try one if it is what you have. The flashing script does cap out at 4 GB, because it writes a FAT16 card and that is FAT16's ceiling.
 * **A card reader**, or an SD slot in your computer.
 * **Your camera**, and five minutes.
 
@@ -75,7 +75,16 @@ The card gets completely erased. Nothing is written to the camera itself, so if 
 
 ### Step 1: check your camera's firmware version
 
-Do this first. Each build here is compiled against **one exact firmware revision**, the one in the table above, and on any other version CHDK simply will not load. Cameras of the same model shipped with different firmware, so you cannot tell from the model name alone.
+Each build here is compiled against **one exact firmware revision**, and on any other version CHDK simply will not load.
+
+**Most cameras here only ever shipped one firmware, so there is nothing to check.** If yours is an **A430, A460, A480, A540 or A640**, skip straight to step 2.
+
+Two need checking, because they shipped in more than one version and you cannot tell which you have from the model name:
+
+* **A470** — shipped as `1.00E`, `1.01A`, `1.01B` and `1.02C`. Only **`1.02C`** is supported here.
+* **A410** — shipped as `1.00E` and `1.00F`. Only **`1.00E`** is supported here.
+
+If you have one of those two, check before you go any further.
 
 1. Put any SD card in the camera and switch it on in **PLAY** mode (the blue triangle, not the shooting mode).
 2. Hold down **FUNC./SET** and, while holding it, press **DISP.**
@@ -83,23 +92,27 @@ Do this first. Each build here is compiled against **one exact firmware revision
 
 The part you want is the number after **Firmware Ver**. `GM1.00B` means firmware `100b`; `1.02C` means `102c`. Compare it with your camera's row:
 
-| Camera | Screen shows | You need the package |
+| Camera | Screen shows | Download |
 |---|---|---|
-| A410 ⚠️ unstable | `1.00E` | `dist/A410` |
-| A430 | `1.00B` | `dist/A430` |
-| A460 | `1.00D` | `dist/A460` |
-| A470 | `1.02C` | `dist/A470` |
-| A480 | `1.00B` | `dist/A480` |
-| A540 | `1.00B` | `dist/A540` |
-| A640 | `1.00B` | `dist/A640` |
+| A410 ⚠️ unstable | `1.00E` | `CHDK-Rewired-v0.1-A410.zip` |
+| A430 | `1.00B` | `CHDK-Rewired-v0.1-A430.zip` |
+| A460 | `1.00D` | `CHDK-Rewired-v0.1-A460.zip` |
+| A470 | `1.02C` | `CHDK-Rewired-v0.1-A470.zip` |
+| A480 | `1.00B` | `CHDK-Rewired-v0.1-A480.zip` |
+| A540 ⚠️ untested | `1.00B` | `CHDK-Rewired-v0.1-A540.zip` |
+| A640 ⚠️ untested | `1.00B` | `CHDK-Rewired-v0.1-A640.zip` |
 
 If your camera shows a different version from the one listed for it, stop here. None of these builds will run on it.
 
 ### Step 2: download the files
 
-On the [repository page](https://github.com/lr-m/CHDK_Rewired), click the green **Code** button, then **Download ZIP**. Unzip it wherever you like; your Downloads folder is fine. You will get a folder called `CHDK_Rewired-main`.
+Go to the [**Releases** page](https://github.com/lr-m/CHDK_Rewired/releases) and, under the latest release, open **Assets**. Download the one zip for your camera from the table above, for instance `CHDK-Rewired-v0.1-A480.zip`.
 
-Inside it, open `dist`, and then the folder for your camera, `A480` say. That folder holds everything the rest of these steps needs:
+You only need that one file. Ignore the **Source code** downloads GitHub adds to every release; those are the source, not the installer.
+
+Unzip it wherever you like; your Downloads folder is fine. You will get a folder named after your camera, `A480` for instance, containing the card image, the three flashing scripts and the instructions.
+
+That folder holds everything the rest of these steps needs:
 
 ```
 CHDK-A480-100b-card.zip     the card contents
@@ -118,7 +131,7 @@ SHA256SUMS.txt              checksums, ignore unless you want them
 >
 > The disk names involved (`/dev/sde`, `disk4`, `2`) are short, similar-looking, and **they change between sessions**. The card that was `/dev/sdd` yesterday can be `/dev/sde` today, and the number that was your card last week can be your hard drive this week. Never reuse a name you remember. Work it out fresh, every single time, using the checks below.
 
-The scripts do have guards. They refuse the disk your operating system boots from, they refuse disks the system does not report as removable (on Windows, which is vaguer about this, an unexpected bus type makes you type it out in full before continuing), and they refuse anything too large to hold a FAT16 volume, which in practice means anything much over 2 GB. Those guards catch most mistakes. They cannot catch all of them: a 2 GB USB stick with your only copy of something on it would pass every single one. So do the checks below yourself.
+The scripts do have guards. They refuse the disk your operating system boots from, they refuse disks the system does not report as removable (on Windows, which is vaguer about this, an unexpected bus type makes you type it out in full before continuing), and they refuse anything too large to hold a FAT16 volume, which means anything over 4 GB. Those guards catch most mistakes. They cannot catch all of them: a 2 GB USB stick with your only copy of something on it would pass every single one. So do the checks below yourself.
 
 **The reliable method is to watch the card disappear.** Do not try to pick the card out of a list by eye, because names and sizes are easy to misread. Instead: with the card plugged in, list the disks; unplug it; list them again; and see which entry vanished. That one is the card and nothing else can be. Then confirm it a second way before you commit to it.
 
@@ -327,7 +340,7 @@ You need an **Administrator** PowerShell. Click Start, type `PowerShell`, right-
 Move into the camera's folder. Type `cd `, with a space after it, then copy the folder's path from File Explorer's address bar and paste it (right-click pastes in PowerShell):
 
 ```console
-PS C:\Windows\system32> cd "C:\Users\You\Downloads\CHDK_Rewired-main\dist\A480"
+PS C:\Windows\system32> cd "C:\Users\You\Downloads\A480"
 ```
 
 **Check 1, watch it disappear.** With the card plugged in, run:
@@ -431,7 +444,7 @@ From there, [the manual](manual.pdf) takes over.
 
 ### If something goes wrong
 
-**The camera switches on as normal, no CHDK.** Nearly always one of three things: the card's LOCK switch is not locked, the card is bigger than 2 GB, or the firmware version does not match. Check them in that order.
+**The camera switches on as normal, no CHDK.** Nearly always one of three things: the card's LOCK switch is not locked, the firmware version does not match, or the card is one this camera will not boot from. Check them in that order, and if you are on a larger card, try a 2 GB one before assuming anything else is wrong.
 
 **The camera will not switch on at all.** Take the card out. The camera will be fine, since it is stock and nothing was written to it. This means the card was formatted in a way this body's boot ROM rejects; try a smaller card.
 

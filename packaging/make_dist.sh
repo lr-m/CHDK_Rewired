@@ -153,8 +153,17 @@ EOF
     ( cd "$stage" && zip -qr -X "$PKG/$CARDZIP" . ) || {
         echo "  FAILED to zip" >&2; failed+=("$model (zip)"); rm -rf "$stage"; continue
     }
+    # Both names, always. Which one a body looks for varies by generation, the
+    # two files are byte-identical marker files whose content is never read, and
+    # READ_ME_FIRST tells the user to copy "both" - so a package carrying only
+    # one sends them hunting for a file that isn't there, on step 2. The A470
+    # and A480 card trees carry only vers.req, hence the fallback.
     for r in vers.req ver.req; do
-        [[ -f "$stage/$r" ]] && cp "$stage/$r" "$PKG/$r"
+        if [[ -f "$stage/$r" ]]; then
+            cp "$stage/$r" "$PKG/$r"
+        elif [[ -f "$stage/vers.req" ]]; then
+            cp "$stage/vers.req" "$PKG/$r"
+        fi
     done
     rm -rf "$stage"
 

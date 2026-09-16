@@ -29,9 +29,14 @@ ROOT="$(dirname "$(readlink -f "$0")")"
 SRC="$ROOT/chdk-src"
 BIN="$SRC/bin"
 
-# model  fw    '*' = the firmware that populates cameras/<model>/card/
-#               (every supported target refreshes its card - the marker is kept
-#                because a card tree holds exactly one DISKBOOT.BIN)
+# model  fw    '*' = this firmware populates cameras/<model>/card/, the tree the
+#                   release package is built from
+#               '+' = this firmware gets its own tree at cameras/<model>/card-<fw>
+#                   and its own package, for a body with a second ported firmware
+#
+# A card tree holds exactly one DISKBOOT.BIN, and the flash scripts are stamped
+# with one card zip filename when the package is made, so two firmwares cannot
+# share a tree or a package. Exactly one '*' per model.
 # The a470 is the one body here with more than one ported firmware. 102c is the
 # reference and the one the card tree carries; 101b was re-derived from its own
 # dump and 101a builds from the 101b source (sub/101a/makefile.inc overrides
@@ -47,7 +52,7 @@ a430 100b *
 a460 100d *
 a470 100e
 a470 101a
-a470 101b
+a470 101b +
 a470 102c *
 a480 100b *
 a540 100b *
@@ -116,7 +121,12 @@ while read -r model fw primary; do
     dest_fir="$builds/PS_${model}_${fw}.FIR"
 
     echo "=============================================================="
-    echo "$model-$fw${primary:+  (also refreshes card/)}"
+    case "${primary:-}" in
+        '*') note="  (also refreshes card/)" ;;
+        '+') note="  (also refreshes card-$fw/)" ;;
+        *)   note="" ;;
+    esac
+    echo "$model-$fw$note"
 
     if [[ ! -d "$SRC/platform/$model/sub/$fw" ]]; then
         echo "  SKIP - platform/$model/sub/$fw does not exist"
@@ -128,7 +138,8 @@ while read -r model fw primary; do
         echo "  would build, then write:"
         echo "    $dest_bin"
         echo "    $dest_fir  (only if this build emits one)"
-        [[ -n "${primary:-}" ]] && echo "    refresh $card"
+        [[ "${primary:-}" == '*' ]] && echo "    refresh $card"
+        [[ "${primary:-}" == '+' ]] && echo "    refresh $ROOT/cameras/$model/card-$fw"
         continue
     fi
 
@@ -160,7 +171,33 @@ while read -r model fw primary; do
     fi
     rm -f "$marker"
 
-    if [[ -n "${primary:-}" ]]; then
+    if [[ "${primary:-}" == "+" ]]; then
+        # A second firmware's tree. Seeded from the primary tree the first time,
+        # because update-card.sh refreshes an existing tree and deliberately
+        # refuses to create one; it then overwrites DISKBOOT.BIN and the modules
+        # with this build's. The modules have to come from THIS build - they
+        # resolve core symbols through an export table, so a module built
+        # against another core is not interchangeable even when it compares
+        # equal today.
+        tree="$ROOT/cameras/$model/card-$fw"
+        if [[ ! -d "$tree" ]]; then
+            echo "  seeding cameras/$model/card-$fw from card/"
+            mkdir -p "$tree" && cp -r "$card"/. "$tree"/
+        fi
+        if ( cd "$SRC" && ./update-card.sh "$model" "card-$fw" ) >/dev/null 2>&1; then
+            # The note is copied from the primary tree and still names its
+            # firmware, which is the one thing about it that must not be wrong.
+            sed -i -E "s/^(firmware:[[:space:]]*).*/\1$fw/" "$tree"/*.TXT 2>/dev/null || true
+            refresh_md5_note "$tree"
+            echo "  -> refreshed cameras/$model/card-$fw/"
+            CARDS+=("$model")
+        else
+            echo "  WARNING - update-card.sh failed for $model card-$fw"
+            FAILED+=("$model-$fw (card-$fw refresh)")
+        fi
+    fi
+
+    if [[ "${primary:-}" == "*" ]]; then
         if ( cd "$SRC" && ./update-card.sh "$model" ) >/dev/null 2>&1; then
             # update-card.sh deliberately refuses to copy PS.FIR because it
             # cannot know which camera built it. Here we can: this build did.
@@ -186,6 +223,9 @@ if [[ "$DIST" -eq 1 && "$DRYRUN" -eq 0 && ${#CARDS[@]} -gt 0 ]]; then
     echo "packaging into dist/"
     args=()
     [[ "$WITH_ROMS" -eq 1 ]] && args+=(--with-roms)
+    # A model appears once per card tree it refreshed, and make_dist.sh already
+    # packages every tree a model has - so pass each model once or it repackages.
+    mapfile -t CARDS < <(printf '%s\n' "${CARDS[@]}" | sort -u)
     "$ROOT/packaging/make_dist.sh" "${args[@]}" "${CARDS[@]}"
 fi
 

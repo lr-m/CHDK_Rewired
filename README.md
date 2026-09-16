@@ -50,13 +50,15 @@ On top of everything stock CHDK already does:
 | PowerShot A430 | 100b | ✅ | ✅ | ✅ | ✅ | ✅ |
 | PowerShot A460 | 100d | ✅ | ✅ | ✅ | ✅ | ✅ |
 | PowerShot A470 | 102c | ✅ | ✅ | ✅ | ✅ | ✅ |
+| PowerShot A470 ⚠️ untested | 101b ³ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | PowerShot A480 | 100b | ✅ | ✅ | ✅ | ✅ | ✅ ² |
 | PowerShot A540 | 100b | ✅ | ✅ | ✅ | ✅ | ❌ |
 | PowerShot A640 | 100b | ✅ | ✅ | ✅ | ❌ | ❌ |
 
 ¹ This ROM carries no startup image to replace. ² With a boot animation.
+³ `101a` runs this same build; see below.
 
-The A470 is the one body here with more than one ported firmware. `102c` is the reference, and the one the release package carries. `101b` has had every reversed address re-derived from its own ROM dump and `101a` builds from the same source, but neither has been run on a camera yet — build them from source with `./build-all.sh a470` if you have that body and fancy being the first. `100e` has no dump behind it and builds stock CHDK only, which is enough to reach *Debug → Dump ROM to card*.
+**The A470 has two builds, one per firmware.** Check yours before downloading: `1.02C` and `1.01B` each have their own zip, and a build will not load on the other's firmware. `1.02C` is the reference and the one that has been run on a camera. `1.01B` had every reversed address re-derived from its own ROM dump and is feature-identical, but **has not been on a body yet** — if you have that firmware you are the first, and the worst case is a camera that ignores the card. Firmware `1.01A` runs the `1.01B` build; download that one. `1.00E` is not packaged: it has no ROM dump behind it, so it builds stock CHDK only, which you can produce with `./build-all.sh a470` if you want to dump its ROM.
 
 > ⚠️ **The A410 is not stable.** It intermittently shuts down with an E16 error — on the shutter press, on taking a picture, or with a black live view on power-on. It is a shutdown, not damage: pull the card and the camera is stock again. The cause is a sensor FIFO overrun that seven separate attempted fixes failed to cure, and it may well be a tired sensor rather than this software. It ships anyway in case someone with an A410 in a drawer fancies a go — just don't rely on it.
 
@@ -84,7 +86,7 @@ Each build here is compiled against **one exact firmware revision**, and on any 
 
 Two need checking, because they shipped in more than one version and you cannot tell which you have from the model name:
 
-* **A470** — shipped as `1.00E`, `1.01A`, `1.01B` and `1.02C`. The download below is **`1.02C`**. `1.01B` and `1.01A` are also ported and build from source (`./build-all.sh a470`), but no one has yet run that build on a camera, so it is not packaged — see the note under the table.
+* **A470** — shipped as `1.00E`, `1.01A`, `1.01B` and `1.02C`. Three of those are supported, and **which one you have decides which zip you download**: `1.02C` takes the A470 zip, `1.01B` and `1.01A` take the A470-101B zip. `1.00E` is not supported.
 * **A410** — shipped as `1.00E` and `1.00F`. Only **`1.00E`** is supported here.
 
 If you have one of those two, check before you go any further.
@@ -98,19 +100,20 @@ The part you want is the number after **Firmware Ver**. `GM1.00B` means firmware
 
 | Camera | Screen shows | Download |
 |---|---|---|
-| A410 ⚠️ unstable | `1.00E` | `CHDK-Rewired-v0.1-A410.zip` |
-| A430 | `1.00B` | `CHDK-Rewired-v0.1-A430.zip` |
-| A460 | `1.00D` | `CHDK-Rewired-v0.1-A460.zip` |
-| A470 | `1.02C` | `CHDK-Rewired-v0.1-A470.zip` |
-| A480 | `1.00B` | `CHDK-Rewired-v0.1-A480.zip` |
-| A540 ⚠️ untested | `1.00B` | `CHDK-Rewired-v0.1-A540.zip` |
-| A640 ⚠️ untested | `1.00B` | `CHDK-Rewired-v0.1-A640.zip` |
+| A410 ⚠️ unstable | `1.00E` | `CHDK-Rewired-v0.1.1-A410.zip` |
+| A430 | `1.00B` | `CHDK-Rewired-v0.1.1-A430.zip` |
+| A460 | `1.00D` | `CHDK-Rewired-v0.1.1-A460.zip` |
+| A470 | `1.02C` | `CHDK-Rewired-v0.1.1-A470.zip` |
+| A470 ⚠️ untested | `1.01B` or `1.01A` | `CHDK-Rewired-v0.1.1-A470-101B.zip` |
+| A480 | `1.00B` | `CHDK-Rewired-v0.1.1-A480.zip` |
+| A540 ⚠️ untested | `1.00B` | `CHDK-Rewired-v0.1.1-A540.zip` |
+| A640 ⚠️ untested | `1.00B` | `CHDK-Rewired-v0.1.1-A640.zip` |
 
 If your camera shows a different version from the one listed for it, stop here. None of these builds will run on it.
 
 ### Step 2: download the files
 
-Go to the [**Releases** page](https://github.com/lr-m/CHDK_Rewired/releases) and, under the latest release, open **Assets**. Download the one zip for your camera from the table above, for instance `CHDK-Rewired-v0.1-A480.zip`.
+Go to the [**Releases** page](https://github.com/lr-m/CHDK_Rewired/releases) and, under the latest release, open **Assets**. Download the one zip for your camera from the table above, for instance `CHDK-Rewired-v0.1.1-A480.zip`.
 
 You only need that one file. Ignore the **Source code** downloads GitHub adds to every release; those are the source, not the installer.
 

@@ -13,7 +13,8 @@ card-flashing scripts, a READ_ME_FIRST, loose
 | [A410](A410/) | 100e | Tue, 15 Sep 2026 17:01:23 +0100 | `CHDK-A410-100e-card.zip` |
 | [A430](A430/) | 100b | Tue, 15 Sep 2026 17:02:59 +0100 | `CHDK-A430-100b-card.zip` |
 | [A460](A460/) | 100d | Tue, 15 Sep 2026 17:04:34 +0100 | `CHDK-A460-100d-card.zip` |
-| [A470](A470/) | 102c | Tue, 15 Sep 2026 17:11:00 +0100 | `CHDK-A470-102c-card.zip` |
+| [A470](A470/) | 102c | Wed, 16 Sep 2026 23:59:52 +0100 | `CHDK-A470-102c-card.zip` |
+| [A470-101B](A470-101B/) | 101b | Wed, 16 Sep 2026 23:59:10 +0100 | `CHDK-A470-101b-card.zip` |
 | [A480](A480/) | 100b | Tue, 15 Sep 2026 17:12:35 +0100 | `CHDK-A480-100b-card.zip` |
 | [A540](A540/) | 100b | Tue, 15 Sep 2026 17:14:08 +0100 | `CHDK-A540-100b-card.zip` |
 | [A640](A640/) | 100b | Tue, 15 Sep 2026 17:15:42 +0100 | `CHDK-A640-100b-card.zip` |

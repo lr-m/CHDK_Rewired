@@ -70,32 +70,51 @@ fw_display() {
 # card root. Each build is compiled against one exact firmware revision, so this
 # is what the package tells the user to check the camera against.
 card_firmware() {
-    local card="$ROOT/cameras/$1/card"
+    local card="$1"
     grep -hoE '^firmware:[[:space:]]*[0-9a-z]+' "$card"/*.TXT 2>/dev/null \
         | head -1 | awk '{print $2}'
+}
+
+# Every card tree this model has: cameras/<model>/card, plus any
+# cameras/<model>/card-<fw> for a body with a second ported firmware. One
+# package each, because the flash scripts are stamped with a single card zip
+# filename and cannot serve two.
+card_trees() {
+    local model=$1 t
+    echo "$ROOT/cameras/$model/card"
+    for t in "$ROOT/cameras/$model"/card-*; do
+        [[ -d "$t" ]] && echo "$t"
+    done
 }
 
 made=()
 failed=()
 
 for model in "${MODELS[@]}"; do
-    card="$ROOT/cameras/$model/card"
+  while read -r card; do
     if [[ ! -f "$card/DISKBOOT.BIN" ]]; then
-        echo "$model: no card tree at cameras/$model/card - skipped"
+        echo "$model: no card tree at ${card#$ROOT/} - skipped"
         failed+=("$model (no card tree)")
         continue
     fi
 
-    fw=$(card_firmware "$model")
+    fw=$(card_firmware "$card")
     if [[ -z "$fw" ]]; then
-        echo "$model: no 'firmware:' line in cameras/$model/card/*.TXT - skipped" >&2
+        echo "$model: no 'firmware:' line in ${card#$ROOT/}/*.TXT - skipped" >&2
         failed+=("$model (no firmware note)")
         continue
     fi
 
     MODEL_UC=$(echo "$model" | tr '[:lower:]' '[:upper:]')
     FWVER=$(fw_display "$fw")
-    PKG="$DIST/$MODEL_UC"
+    # The primary tree keeps the bare model name, so an existing download link
+    # does not move. A second firmware is qualified by it, because two packages
+    # for one body are only telling apart by the firmware they are for.
+    if [[ "$(basename "$card")" == "card" ]]; then
+        PKG="$DIST/$MODEL_UC"
+    else
+        PKG="$DIST/$MODEL_UC-$(echo "$fw" | tr '[:lower:]' '[:upper:]')"
+    fi
     CARDZIP="CHDK-$MODEL_UC-$fw-card.zip"
 
     # PS.FIR on the card means this body can be booted through PLAY -> MENU ->
@@ -108,7 +127,7 @@ for model in "${MODELS[@]}"; do
     MD5=$(md5sum "$card/DISKBOOT.BIN" | cut -d' ' -f1)
 
     echo "=============================================================="
-    echo "$MODEL_UC  fw $fw  built $BUILT"
+    echo "$(basename "$PKG")  fw $fw  built $BUILT"
 
     if [[ "$DRYRUN" -eq 1 ]]; then
         echo "  would write $PKG/{$CARDZIP,flash-card-*,READ_ME_FIRST.txt,SHA256SUMS.txt}"
@@ -284,8 +303,9 @@ EOF
     ( cd "$PKG" && find . -type f ! -name SHA256SUMS.txt -printf '%P\n' | sort \
         | xargs -d '\n' sha256sum > SHA256SUMS.txt )
 
-    echo "  -> dist/$MODEL_UC/  ($(du -sh "$PKG" | cut -f1))"
-    made+=("$MODEL_UC $fw")
+    echo "  -> dist/$(basename "$PKG")/  ($(du -sh "$PKG" | cut -f1))"
+    made+=("$(basename "$PKG") $fw")
+  done < <(card_trees "$model")
 done
 
 # ---- dist index ------------------------------------------------------------

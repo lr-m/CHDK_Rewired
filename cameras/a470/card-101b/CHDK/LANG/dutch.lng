@@ -1,0 +1,822 @@
+// CHDK language file
+// Opmaak van de taalregel:
+// double: 513 = 515 / 514 = 516
+// <id> "<tekst>"
+//   <id>   - is een positief getal
+//   <text> - beschrijving tussen aanhalingstekens
+  
+  1 "Hoofdmenu"
+
+  2 "RAW-parameters"
+  3 "OSD-parameters"
+  4 "Histogram-parameters"
+  5 "Zebra-parameters"
+  6 "Script-parameters"
+  7 "Beeld-parameters"
+  8 "Overige parameters"
+  9 "Debug-parameters"
+ 10 "Fabrieksinstellingen"
+ 11 "Instellingen opslaan"
+
+ 12 "Terug"
+
+ 13 "RAW"
+
+ 14 "Sla RAW op"
+ 16 "Enkel eerste RAW in reeks"
+ 17 "RAW-bestand in map met JPEG"
+ 18 "RAW-bestandsprefix"
+ 19 "RAW-bestandsextensie"
+
+ 20 "OSD"
+
+ 21 "Toon OSD"
+ 22 "Toon statusdisplay"
+ 23 "Toon diverse waarden"
+ 24 "Zoomwaarde"
+ 25 "Toon DOF-calculator"
+ 26 "Toon klok"
+ 27 "OSD layouteditor"
+ 28 "Batterij"
+
+ 29 "Histogram"
+
+ 30 "Toon histogram"
+ 31 "Histogram layout"
+ 32 "Histogram mode"
+ 33 "Toon histogr. over/onder EXP"
+ 34 "Negeer grenspieken"
+ 35 "Schaal automatisch"
+
+ 36 "Zebra"
+
+ 37 "Teken Zebra"
+ 38 "Zebra mode"
+ 39 "Onderbelichting drempel"
+ 40 "Overbelichting drempel"
+ 41 "Herstel normaal scherm"
+ 42 "Herstel OSD"
+ 43 "Overschrijf zebra met..."
+
+ 44 "Script"
+
+ 45 "Laad script..."
+ 46 "Scriptvertraging (.1s)"
+ 47 "Huidig script"
+ 48 "Scriptinstellingen"
+
+ 49 "Beeldinstellingen"
+
+ 50 "Taal..."
+ 51 "OSD codepagina"
+ 52 "Menu RBF lettertype..."
+ 53 "Kleuren"
+ 54 "OSD tekst"
+ 55 "OSD achtergrond"
+ 56 "Histogram"
+ 57 "Histogram achtergrond"
+ 58 "Histogram rand"
+ 59 "Histogram EXP merkers"
+ 60 "Zebra Onderbelichting"
+ 61 "Zebra Overbelichting"
+ 62 "Batterijpictogram"
+ 63 "Menutekst"
+ 64 "Menuachtergrond"
+ 65 "Kladblok lettertype"
+ 66 "Kladblok achtergrond"
+
+ 67 "Overige"
+
+ 68 "Bestandsbeheer"
+ 69 "Kalender"
+ 70 "Kladblok"
+ 71 "Spelletjes"
+ 72 "Zaklamp"
+ 73 "Toon splashscherm bij opstarten"
+ 74 "Gebruik zoomknoppen voor focus"
+ 75 "<ALT> mode knop"
+ 76 "Teken palet"
+ 77 "Toon versieinfo"
+ 78 "Toon geheugenstatus"
+
+ 79 "Debug"
+
+ 80 "Toon debugdata"
+ 81 "PropCase pagina"
+ 82 "Toon diverse waarden"
+ 83 "Geheugenbeheer"
+ 84 "Alt +/- debug-actie"
+ 85 "Maak geheugenkaart opstartbaar"
+
+ 86 "Batterij"
+
+ 87 "MAX Voltage (mV)"
+ 88 "MIN Voltage (mV)"
+ 90 "Toon percentage"
+ 91 "Toon voltage"
+ 92 "Toon pictogram"
+
+ 93 "Kladblok"
+
+ 94 "Open bestand..."
+ 95 "Laatst geopend"
+ 96 "Kies RBF lettertype"
+ 97 "Codepagina"
+ 98 "Splits tussen woorden"
+ 99 "Autoscroll activeren"
+100 "  Scrollvertraging (sec)"
+
+102 "Reversi"
+103 "Sokoban"
+
+104 "*** Basisinstellingen ***"
+105 "Weet je ZEKER dat je wilt herstellen?"
+
+106 "*** Versie-info ***"
+107 "CHDK-ver: %s, #%s\nDatum:    %s\nTijd:    %s\nCamera:  %s\nFW Vers: %s\nCompiler: %s"
+
+108 "*** Geheugen-info ***"
+109 "Vrij geheugen: %d bytes\nCHDK-grootte: %d bytes\ngeladen op: 0x%X"
+
+110 "*** Informatie ***"
+111 "Schakel je camera naar\nPLAY-mode\nen probeer opnieuw. :)"
+
+// file browser titels
+112 "Bestandsbeheer"
+113 "Kies scriptbestand"
+114 "Kies tekstbestand"
+115 "Kies RBF-lettertypebestand"
+116 "Kies taalbestand"
+
+// voor de kalender
+117 "januari"
+118 "februari"
+119 "maart"
+120 "april"
+121 "mei"
+122 "juni"
+123 "juli"
+124 "augustus"
+125 "september"
+126 "oktober"
+127 "november"
+128 "december"
+
+129 "Ma"
+130 "Di"
+131 "Wo"
+132 "Do"
+133 "Vr"
+134 "Za"
+135 "Zo"
+
+136 "Vandaag:"
+
+// Berichtenbus knoppen
+137 "Oke"
+138 "Ja"
+139 "Nee"
+140 "Annuleer"
+
+// OSD layout editor
+141 "Histogram"
+142 "DOF calc"
+143 "Statusdisplay"
+144 "Diverse wrd"
+145 "Batt picto"
+146 "Batt tekst"
+147 "Klok"
+
+// palet
+148 "Druk SET om een kleur te tekenen"
+149 "    Druk MENU om te verlaten    "
+150 "Kleur"
+151 "Gebruik %s om de kleur te kiezen"
+
+// reversi
+152 "*** Spelresultaat ***"
+153 "Je hebt gewonnen! :)"
+154 "Je hebt verloren! :("
+155 "Remise! :/"
+
+156 "*** Verkeerde zet ***"
+157 "Dit mag niet!"
+158 "Deze cel is niet vrij!"
+
+163 "*** Over ***"
+
+// sokoban
+164 "  Niveau"
+165 "  Zetten"
+166 "*** Einde ***"
+167 "Ja!\n  Je hebt het gehaald!  "
+
+// console
+168 "*** START ***"
+169 "*** ONDERBROKEN ***"
+170 "*** EINDE ***"
+
+// file browser
+171 "*** Wis map ***"
+172 "Wil je ECHT alle bestanden\nwissen uit de\ngekozen map?"
+173 "*** Wis bestand ***"
+174 "Wil je ECHT het geselecteerde\nbestand wissen?"
+
+// benchmark
+175 "Benchmark"
+176 "Berekenen..."
+178 "Scherm"
+179 "Schrijf     :"
+180 "Lees        :"
+181 "Geheugen"
+182 "Flashkaart"
+183 "Schrijf (RAW):"
+184 "Schrijf (Mem):"
+185 "Schrijf (64k):"
+186 "Lees    (64k):"
+
+187 "LCD deactiveren uit"
+
+// file browser
+188 "Knippen"
+189 "Kopieer"
+190 "Plakken"
+191 "Wissen"
+192 "Selectie omkeren"
+193 "*** Knip bestanden ***"
+194 "Wil je ECHT de\n%d gekozen bestand(en)\nwissen van %s/?"
+195 "*** Kopieer bestanden ***"
+196 "Wil je ECHT de\n%d gekozen bestand(en)\nkopieren van %s/?"
+197 "*** Wis bestanden ***"
+198 "Wil je ECHT de\n%d gekozen bestand(en)\nwissen?"
+199 "Even geduld..."
+
+// raster
+200 "Toon raster"
+201 "Laad raster uit bestand..."
+202 "Rasterlijnen"
+203 "Rasterinstellingen"
+204 "Kies rasterbestand"
+205 "Huidig raster"
+
+206 "Ruisonderdrukking"
+
+207 "Overschrijf rasterkleuren"
+208 "Lijnkleur"
+209 "Opvulkleur"
+
+210 "DOF-Calculator"
+
+211 "DOF-Calculator"
+212 "Onderw.afst. als dichtb.lim." 
+213 "Gebr. EXIF-ond.afst. (PC65)"
+214 "Toon ond.afst. in Diversen"
+215 "Toon dichtbijlimiet in Div."
+216 "Toon verre limiet in Div."
+217 "Toon hyperfocale afst. in Div."
+218 "Toon DOF in Diversen"
+
+219 "Diverse Waarden"
+
+220 "Diverse Waarden"
+221 "Toon in bekijkmode"
+222 "Toon zoom"
+223 "Toon 'echt' diafragma"
+224 "Toon 'echte' ISO"
+225 "Toom 'markt' ISO"
+226 "Toon ISO alleen in AutoISO"
+227 "Toon Kies belichting Ev (Tv+Av)"
+228 "Toon gemeten Ev (Bv+Sv)"
+229 "Toon Kies Bv (helderheid)"
+230 "Toon gemeten Bv"
+231 "Toon overbel. (Geen flits!)"
+232 "Toon luminantie"
+
+233 "Video-instellingen"
+
+234 "Video-instellingen"
+235 "Videomode"
+236 "Video-bitrate"
+237 "Videokwaliteit"
+
+238 "Extra Foto-instellingen"
+
+239 "Extra Foto-instellingen"
+//240 "Overschr. sluitersnelh."
+//241 "    Waardefactor"
+242 "Overscrijf Diafragmawaarde"
+243 "Overschrijf ISO-waarde"
+//244 "    Waardefactor"
+245 "Overschrijf onderw.afstand"
+246 "    Waardefactor (mm)"
+
+247 "Bracketing in Continu-mode"
+
+248 "Bracketing in Continu-mode"
+249 "TV-bracketing-waarde"
+250 "AV-bracketing-waarde"
+251 "ISO-bracketing-waarde"
+253 "Onderw.afst. bracketwrd (MF)"
+255 "Bracketing-type"
+
+256 "Autostart"
+257 "Afstandsbediening aan"
+
+//258 "Belichting (Geen flits)"
+//259 "Belichting (Geen flits)"
+//260 "Herbereken belichting"
+//261 "TV-belichting herbereken volgorde"
+//262 "AV-belichting herbereken volgorde"
+//263 "ISO-belichting herbereken volgorde"
+
+264 "Leeg overschrijfwrd bij starten"
+
+265 "Toon Canon overbelichtingwrd"
+
+266 "RAW ontwikkelen"
+267 "Schakel camera naar\nopname-mode en neem\neen foto."
+268 "Kies RAW-bestand"
+269 "RAW-som"
+270 "RAW-gemiddelde"
+271 "Niet genoeg ruimte:\n%dM vereist, %dM beschikbaar."
+
+272 "Toon OSD in Bekijk-mode"
+273 "Taaklijst start"
+
+275 "Leeg bracket-wrd bij starten"
+
+276 "Maak kaart met twee partities"
+277 "Wissel partities"
+278 "Dit VERNIETIGT ALLE INFORMATIE\nop kaart. Doorgaan?"
+279 "Deze kaart heeft maar een partitie."
+280 "Fout"
+281 "Waarschuwing"
+282 "Informatie"
+283 "RGB-zebra (alleen overbel.)"
+
+284 "ND-filter status"
+
+285 "Toon Histo Ev raster"
+
+286 "OSD-waarschuwing"
+287 "OSD-waarsch. achtergrond"
+288 "Ruimte-over-pictogramkleur"
+289 "Toon ruimte-over-pictogram"
+290 "Ruimte over"
+291 "Toon ruimte in procent"
+292 "Toon ruimte in MB"
+293 "Ruimtetekst"
+294 "  Toon RAW-foto's over"
+295 "RAW over"
+
+296 "Toon RAW-status"
+
+297 "Toon waarden in video"
+
+298 "  Sluitersnelh. enum-type"
+299 "Gebr.menu inschakelen"
+300 "Gebruikersmenu"
+301 " "
+
+302 " Adapter Lensschaal, 100=1x"
+303 "Toon ruimtebalk"
+304 "  Grootte op scherm"
+305 "  Breedte/Hoogte"
+306 "  Procent-grens"
+307 "  MB-grens"
+308 "Waarschuwingseenheid"
+309 "  Waarschuwingsgrens"
+310 "Schakel optische zoom in"
+
+311 "Klok"
+312 "Klok-instellingen"
+313 "Klok-soort"
+314 "Ruimte-over achtergrondkleur"
+315 "12u klokindicator"
+316 "Toon bij sluiter indrukken"
+
+317 "Raw-bekijkinstellingen"
+318 "Raw"
+
+319 "Ruimte-bekijkinstellingen"
+320 "Ruimte"
+
+321 "Aangepaste Auto ISO"
+
+322 "Aangepaste Auto ISO"
+323 "Aangepaste Auto ISO aan"
+324 "Minimum sluitersnelh."
+325 "Gebr.factor (1/FL/factor)"
+326 "IS-factor (Tv*factor)"
+327 "Max ISO HOOG "
+328 "Max ISO AUTO "
+329 "Min ISO "
+
+330 "Menutitel tekstkleur"
+331 "Menutitel achtergr.kleur"
+332 "Cursor tekstkleur"
+333 "Cursor achtergr.kleur"
+334 "Centreer menu"
+335 "Geluid uit bij zoomen"
+
+336 "Slechte pixel wissen"
+337 "Uit"
+338 "Gemid."
+339 "RAWconv"
+
+340 "Overschrijf"
+341 "Overschrijf achtergr."
+342 "Overschrijvingen uit"
+343 "  Incl. AutoIso & Bracketing?"
+344 "  Verberg bij ?"
+345 "Uitschakelen @ Video-opname?"
+346 "Toon resterende videotijd?"
+347 "  Vernieuwing (~sec)"
+348 "Resterende videotijd"
+349 "Wis videoinst. bij opstarten?"
+350 "Schakel snelle Ev-wissel in?"
+//351 "   Stapgrootte (1 EV)?"
+352 "EV-correctie"
+353 "Wil je ECHT ALLE RAW-bestanden\nzonder bijbehorende JPG\nin DCIM-map wissen?"
+354 "Wil je ECHT ALLE RAW-bestanden\nzonder bijbehorende JPG\nin geselecteerde map wissen?"
+355 "Wil je ECHT ALLE RAW-bestanden\nzonder bijbehorende JPG\n wissen? (Zonder gemarkeerde)"
+356 "Verwerk RAW is niet\nvan toepassing op dit item"
+357 "*** Verwerk RAW-bestanden ***"
+358 "Verwerk RAW"
+ 
+359 "Gebr.menu als hoofdmenu"
+
+360 "Symboollettertype"
+361 "Kies symboolbestand"
+362 "Schakel symbolen in"
+363 "Symbool tekstkleur"
+364 "Symbool achtergrondkleur"
+
+365 "Aangep. curves"
+366 "Aangep. curves"
+367 "Laad curveprofiel..."
+368 "Schakel curve in"
+369 "Kies curvebestand"
+
+370 "Randbedekking"
+371 "Randbedekking"
+
+372 "Schakel randbedekking in"
+373 "Randbedekking limiet"
+374 "Randbedekking kleur"
+
+375 "Afst.bed. parameters"
+376 "Afst.bed. parameters"
+377 "Schakel afst.bed. in"
+378 "Schakel synch in"
+379 "Schakel synchwachttijd in"
+380 "Synchwachttijd 0,1ms"
+
+382 "AF-toets"
+383 "Laad standaard parameters"
+384 "Parameters ingesteld"
+
+385 "Schakel Raw uit @ Sport"
+386 "Schakel Raw uit @ Burst"
+387 "Schakel Raw uit @ EV-bracketing"
+388 "Schakel Raw uit @ Timer"
+
+389 "Uitzonderingen"
+390 "RAW-Uitzonderingenmenu"
+391 "Waarschuw bij uitzondering?"
+392 "Selecteer 1e item in menu" 
+
+393 "Timeout (0,1s)"
+394 "Synch.bare a.b."
+395 "Snelle videobeheersing?"
+396 "Temperatuur"
+397 "Toon temperatuur?"
+398 "Vid.kwal.beheersing?"
+401 "Opstartgeluid"
+402 "Raw-aftrek prefix"
+403 "Raw-aftrek extensie"
+404 "Trek input donkerwaarde af"
+405 "Trek output donkerwaarde af"
+406 "van"
+407 "...%d bestanden"
+408 "Trek af"
+409 "Trek af van gemarkeerde"
+410 "Sla inst. op"
+411 "Video Ev-display"
+415 "Voeg raw-suffix toe"
+416 "  in Fahrenheit"
+417 "Laad randbedekking"
+418 "Sla randbedekking op"
+419 "Aan in afspelen"
+421 "Laden+Instellen Zoom"
+422 "Vergrendel randbedekking"
+423 "Achter gordijn flitssynch"
+424 "DNG-formaat"
+425 "RAW-buffer gecached"
+426 "Kan CHDK/badpixel.bin niet laden\nStart aub \nCHDK/SCRIPTS/TEST/badpixel.lua"
+427 "Toon raw-opslatijd"
+
+428 "4-op-een-rij"
+429 "Tegenstander:"
+430 "Mens"
+431 "Speler 1 won het spel"
+432 "Speler 2 won het spel"
+433 "Ik heb je verslagen"
+434 "Het werd gelijkspel"
+
+435 "Raw uit @ RandBedekking"
+436 "Raw uit @ Auto Mode"
+437 "   ALLEEN in video"
+//438 "   Flitskracht"
+
+439 "'DNG'-extensie"
+440 "DNG zichtbaar via USB"
+
+441 "Mastermind"
+442 "beschikbare kleuren"
+443 "on de goede plek"
+444 "kleur in antwoord"
+445 "CORRECT :-)"
+446 "GAME OVER"
+447 "[<-][->] kies kolom"
+448 "[OP][NEER] kies kleur"
+449 "[SET] volg. rij"
+450 "GEEN DUB. KLEUR"
+
+451 "Herstel bestanden"
+452 "Herstart camera..."
+453 "Forceer handm. flits"
+
+454 "Verbeter JPEG Quality"
+455 "Bij fout, herstart Lua"
+456 "Filter randen"
+457 "Laat altijd zien"
+458 "   Pano overlap (%)"
+459 "Maak badpixel.bin"
+460 "Je moet REC-mode\n instellen om dit te doen."
+461 "%s uitgezet in versie"
+462 "Aanraakscherm functies overschrijven"
+463 "Video AE bediening"
+464 "<Alt> Snelkoppeling Knoppen"
+465 "USB info"
+466 "Laat USB info zien"
+467 "Sla ROM vastlopers op"
+468 "FOUT: SystemEventInit en System.Create niet gelukt"
+469 "ROM crash log kan niet worden opgeslagen"
+470 "ROM crash log opgeslagen naar ROMLOG.LOG"
+
+471 "Schakelaar Type"
+472 "Controle Methode"
+473 "Opties"
+
+474 "Tekst blok settings"
+475 "Kies textbox charmap"
+476 "Meer ->"
+477 "Maak map"
+478 "Hernoem"
+479 "Voer de naam in van de map:"
+480 "Voer een nieuwe bestandsnaam in:"
+481 "Verwijder map"
+
+482 "Huidige persoonlijke curve"
+483 "Tetris"
+484 "Laat partitie nummer zien"
+485 "Video zonder tijds limiet"
+486 "De sensor kan oververhit raken tijdens lange opnames!"
+
+//GPS Start---------------------------------
+487 "GPS Instellingen"
+488 "Ga naar huidige foto"
+489 "Geef de kompas weer"
+490 "Laat geo-coordinaten zien"
+491 "Geef de hoogte weer"
+492 "Sla locatie op met iedere JPG"
+493 "GPX-Track - Tijd Interval"
+494 "Start GPX-TRACK Opname"
+495 "Stop GPX-TRACK Opname"
+496 "Verberg Kompas"
+497 "Zet navigeren naar foto uit"
+498 "Wacht Tijd voor GPS-Signaal"
+499 "Kompas    - Voorbeeld interval"
+500 "Navigatie - Voorbeeld interval"
+501 "Tijd om naar afspeel-instelling te gaan"
+502 "Tijd om achtergrond verlichting uit te zetten"
+503 "Algemeen     - Instellingen"
+504 "GPS pauze test interval"
+505 "Terugstellen van kompas"
+506 "Loggen    - Instellingen"
+507 "Labelen    - Instellingen"
+508 "Navigatie - Instellingen"
+509 "Afsluiten op % batterij niveau"
+510 "Verlaat Labelen - Korte waarde"
+511 "0 - 2D-3D Fix"
+512 "Knipperende LED Tijdens Verlaat Labelen"
+513 "Ga naar afspeel-instelling"
+514 "Zet achtergrond verlichting uit"
+515 "Ga naar afspeel-instelling"
+516 "Zet achtergrond verlichting uit"
+517 "Tijd om naar afspeel-instelling te gaan"
+518 "Tijd totdat achtergrond verlichting uit gaat"
+519 "Laat GPS Status zien"
+520 "Geef alarm bij laag voltage"
+521 "Zet positie als thuis locatie" 
+522 "Navigeer naar huis"
+523 "Zet positie als huidige tijdzone"
+524 "Laat historie symbool zien"
+525 "Zet navigatie naar huis uit"
+526 "Controleer verandering van Tijdzone"
+527 "Geluids Waarschuwingen            "
+528 "Zet CHDK GPS functies aan"
+529	"Geen GPS!"
+530	"Tijdzone is verandert!"
+531	"Batterij onder ingestelde waarde!"
+532	"Camera zal over %02d seconden afsluiten!"
+533	"Automatisch Afsluiten gestopt!"
+534	"Camera wacht op de GPS voor %01d:%02d"
+535	"Naar huis navigeren Loc\n is niet mogelijk!"
+536	"Kan niet naar foto navigeren: %s!"
+537	"Afstand:    = %i m"
+538	"Tijdsduur:    = %i:%i:%i"
+539	"Snelheid:        = %s km/h"
+540	"Richting:   = %i°"
+541	"Doel: = %i°"
+542	"Navigatie naar foto %s gestart"
+543	"lat=%s - long=%s "
+544	"richting = %i°"
+545	"Navigatie naar huis gestart"
+//GPS End-----------------------------------------
+
+546 "Standaard kortste Sluiter Tijd"
+547 "Standaard hoogste ISO waarde"
+548 "OverBelichting Compensatie"
+549 "OverBelichting Pixel Percentage"
+
+550 "Annuleren [Half indrukken]"
+
+551 "Zet programma start aan"
+
+552 "Zet Zoom Assistent knop uit"
+
+553 "DNG versie"
+554 "Menu Instellingen"
+555 "Laat <ALT> Help Scherm zien"
+556 "  Help Scherm vertraging"
+557 "CHDK Instellingen"
+
+// <ALT> mode help screen text
+558 "%-20s %-14s"                           // Header format, adjust if needed; but total len must be 35
+559 "<ALT> Sneltoetsen"                       // Len must be <= first string in header format (20)
+560 "Sluiter half ingedrukt +"                  // Len must be <= first string in header format (20)
+561 "MENU=CHDK Menu"                        // Len must be <= second string in header format (14)
+562 "MENU=Gebruiker Menu"                        // Len must be <= second string in header format (14)
+563 "SET=Programma Menu, SLUITER=Start Programma"   // Len must be <= 35
+564 "Focus  %5s=Inf.  %5s=HyperFocal"       // Len must be <= 35
+565 "Handmatige Focus"
+566 "Verberg CHDK OSD wanneer ingedrukt"
+567 "  * - niet beschikbaar in <ALT> instelling  "   // Len must be <= 35
+
+568 "'%s'\ntoegevoegd aan het Gebruikers Menu"
+569 "Gebruikers Menu is vol"
+
+570 "SD Kaart"
+571 "Taal & Lettertype"
+
+572 "Voeg programma toe aan het Gebruikers Menu"
+
+573 "Focus Oneindig"
+574 "Verander Focus Verhouding"
+
+575 "AAN/UIT Knop in <ALT> instelling"
+
+576 "Modules"
+577 "Module Controleur"
+578 "Zet Registreren aan"
+579 "Verwijder Module Register"
+
+580 "Aktiveer Half-Ingedrukte Sneltoetsen"
+581 "<< Sneltoetsen niet aktief  >>"
+
+582 "Console"
+583 "Laat console zien in"
+584 "Verberg N sec. na laaatste verandering"
+585 "Herstart console"
+586 "Geef laatste console weer"
+587 "Console maat & positie herijken."
+
+588 "RAM Dump instellingen"
+589 "Start Adres"
+590 "Dump Size (0 = ALL RAM)"
+591 "Dump Delay (s)"
+
+592 "Geen ruimte om de module te starten\n'%s'"
+593 "Module\n'%s'\nwerkt niet in 'simple' instelling"
+
+594 "Voeg \n%s\nin Gebruikers Menu?"
+595 "Verwijder\n%s\nvan Gebruikers Menu?"
+596 "Verwijder en voeg knoppen in Menu toe"
+597 "Voeg module aan het Gebruikers Menu toe"
+598 "Verwijder huidige item van Gebruikers Menu"
+
+599 "EyeFi Instellingen"
+600 "EyeFi Bediening"
+601 "Beschikbare netwerken"
+602 "Ingestelde netwerken"
+603 "Niet gelukt"
+604 "Succes"
+605 "Verkeerd wachtwoord?"
+606 "Netwerk toegevoegd"
+607 "Problemen met instellen netwerk"
+608 "Voeg netwerk toe"
+609 "Test netwerk?"
+610 "Wachtwoord"
+611 "Fout bij starten eyefi"
+612 "Niet genoeg geheugen"
+613 "Geen Eyefi Kaart gevonden"
+614 "Kan het netwerk niet verwijderen"
+615 "Netwerk verwijderd"
+616 "Weet je het zeker?"
+617 "Eyefi wlan aan"	
+618 "Eyefi wlan uit"
+619 "Forceer eyefi wlan aan"
+620 "Forceer eyefi wlan uit"
+621 "Kan netwerk niet vinden"
+622 "Geen network gevonden"
+
+623 "Invoer kanaal"
+624 "FOUT: MISSENDE MODULES"
+
+625 "DNG Krimp Maat"
+
+626 "Hotshoe overschrijven"
+627 "In gebruik"
+628 "Leeg"
+629 "Uit"
+
+630 "CHDK Kleur Test"
+
+631 "Herijk Alle Kleuren"
+632 "Weet je ZEKER dat \nalle kleuren standaard instellingen moeten krijgen?"
+
+633 "Zet lange bestandsnaam ondersteuning uit"
+
+// additional benchmark module strings
+// Combined length of next 3 must be less than 31 characters
+634 "START"
+635 "Log"
+636 "SD Test"
+637 "Tekst uitvoer   :"
+
+638 "Zet RAW keuze Snelkoppeling aan"
+
+// CPU Info
+639 "CPU Info"
+640 "Schreef %s"
+
+// Sudoku
+641 "Sudoku"
+
+// Sudoku menu (15 chars max)
+642 " Check sudoku "
+643 " Solve sudoku "
+644 " New sudoku "
+645 " Enter sudoku "
+646 " Info "
+647 " Exit "
+648 " Save and Exit "
+649 " Del save game "
+
+650 "Congratulations!"
+651 "You did it!"
+652 "Everything's correct!"
+653 "Tada!"
+654 "0 mistakes!"
+655 "Info"
+656 "A number occurs twice"
+657 "Solved"
+658 "Not complete"
+659 "Not solvable"
+660 "Couldn't find a mistake"
+661 "There's something wrong here..."
+
+// Snake
+662 "Snake"
+663 "Points: %d"
+
+// Module names
+664 "uBASIC Scripting"
+665 "Lua Scripting"
+666 "Motion Detection"
+667 "Popup Menu"
+
+668 "VBR Minimale Bitsnelheid"
+
+669 "Zet Raw @ Canon RAW uit"
+
+670 "Wis Canon Overtrek"
+
+671 "Zet video uit in rec. aan"
+
+672 "Mogelijke Canon ROM corruptie!\nLaat dit aub weten op het CHDK forum."
+673 "Niet gelukte blokken:"
+674 "Klik OK om de ROM te dumpen"
+675 "Checksum ROM bij start"

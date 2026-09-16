@@ -13,13 +13,23 @@
 # deletes anything - a file already on the card tree that isn't in the source
 # (a hand-added preset, a per-camera script) is left alone.
 #
-# Usage: ./update-card.sh <camdir>   e.g. ./update-card.sh a470
+# Usage: ./update-card.sh <camdir> [cardtree]
+#          e.g. ./update-card.sh a470
+#               ./update-card.sh a470 card-101b
+#
+# cardtree defaults to "card". A body with more than one ported firmware keeps
+# one tree per firmware - cameras/<model>/card is the one the release package
+# is built from, and cameras/<model>/card-<fw> is a second firmware's. They are
+# separate trees rather than one tree with two boot files because a card holds
+# exactly one DISKBOOT.BIN, and because the flash scripts are stamped with a
+# single card zip filename when the package is made.
 
 set -euo pipefail
 
 CAMDIR="${1:-}"
+CARDTREE="${2:-card}"
 if [[ -z "$CAMDIR" ]]; then
-    echo "usage: $0 <camdir>   (e.g. $0 a470, matching cameras/<camdir>/)" >&2
+    echo "usage: $0 <camdir> [cardtree]   (e.g. $0 a470, or $0 a470 card-101b)" >&2
     exit 1
 fi
 
@@ -29,7 +39,7 @@ SRC_MODULES="$HERE/CHDK/MODULES"
 SRC_GRIDS="$HERE/CHDK/GRIDS"
 SRC_SCRIPTS="$HERE/CHDK/SCRIPTS"
 SRC_SOUNDS="$HERE/CHDK/SOUNDS"
-CARD="$HERE/../cameras/$CAMDIR/card"
+CARD="$HERE/../cameras/$CAMDIR/$CARDTREE"
 
 [[ -f "$BIN/DISKBOOT.BIN" ]]  || { echo "error: $BIN/DISKBOOT.BIN missing - run make fir first" >&2; exit 1; }
 [[ -d "$SRC_MODULES" ]]       || { echo "error: $SRC_MODULES missing" >&2; exit 1; }

@@ -40,6 +40,24 @@ static coord    mbox_buttons_x, mbox_buttons_y;
 #define BUTTON_SEP      18
 static void (*mbox_on_select)(unsigned int btn);
 
+// The key a box has already acted on, held until it is physically released.
+//
+// A press spans many physw passes; a click edge is one. Blocking only the edge
+// leaves every later pass handing the still-down key straight to Canon, which
+// is what made the first attempt at this look like it had changed nothing.
+// Same shape as recui_swallow in core/gui_recui.c, and for the same reason.
+static long mbox_swallow;
+
+// Called from kbd_process() every pass, including after the box has closed -
+// gui_mbox_kbd_process() stops being called the moment gui_set_mode() switches
+// away, and the SET that dismissed the box is still down at that point.
+int gui_mbox_kbd_blocking(void)
+{
+    if (mbox_swallow && !kbd_is_key_pressed(mbox_swallow))
+        mbox_swallow = 0;
+    return mbox_swallow != 0;
+}
+
 //-------------------------------------------------------------------
 void gui_mbox_init(int title, int msg, const unsigned int flags, void (*on_select)(unsigned int btn))
 {
@@ -74,6 +92,7 @@ void gui_mbox_init(int title, int msg, const unsigned int flags, void (*on_selec
     mbox_flags = flags;
     mbox_on_select = on_select;
 
+    mbox_swallow = 0;
     gui_mbox_mode_old = gui_set_mode(&mboxGuiHandler);
 }
 
@@ -124,19 +143,41 @@ void gui_mbox_draw()
 }
 
 //-------------------------------------------------------------------
+// Returns 1 when the box actually used the key, so Canon never sees it.
+//
+// This used to return 0 unconditionally, and for as long as every message box
+// was raised from inside <ALT> that was harmless: kbd_process() ends in
+// `return kbd_blocked`, which is already 1 there, so the press was blocked by
+// the ALT state rather than by anything this function said.
+//
+// The playback bend prompt (gui_bend_shot_prompt(), held mode button over a
+// picture) is raised OUTSIDE <ALT>, where kbd_blocked is 0. There the missing
+// return let both things happen on one press: the box moved its selection from
+// NO to YES, and Canon - which still saw the arrow - stepped to the previous
+// picture and repainted over the box. Unusable, and it looked like the box had
+// no key handling at all when in fact it had too little authority.
+//
+// Only the keys actually consumed are claimed. Anything else still falls
+// through exactly as before, so a box cannot strand a body by swallowing the
+// shutter.
 int gui_mbox_kbd_process()
 {
-    switch (kbd_get_clicked_key() | get_jogdial_direction())
+    long key = kbd_get_clicked_key() | get_jogdial_direction();
+    int used = 0;
+
+    switch (key)
     {
     case JOGDIAL_LEFT:
     case KEY_LEFT:
         if (--mbox_button_active < 0) mbox_button_active = mbox_buttons_num - 1;
         mbox_to_draw = 2;
+        used = 1;
         break;
     case JOGDIAL_RIGHT:
     case KEY_RIGHT:
         if (++mbox_button_active >= mbox_buttons_num) mbox_button_active = 0;
         mbox_to_draw = 2;
+        used = 1;
         break;
     case KEY_SET:
         gui_set_mode(gui_mbox_mode_old);
@@ -144,9 +185,31 @@ int gui_mbox_kbd_process()
             gui_set_need_restore();
         if (mbox_on_select) 
             mbox_on_select(buttons[mbox_buttons[mbox_button_active]].flag);
+        used = 1;
         break;
     }
-    return 0;
+
+    // Latch the real keys, so the block outlives both the click edge and the
+    // box itself. Jogdial directions are events rather than held keys, so
+    // there is nothing to wait for a release on.
+    if (used && (key == KEY_LEFT || key == KEY_RIGHT || key == KEY_SET))
+        mbox_swallow = key;
+
+    // Level, not edge. While the box is up it owns these keys outright - it is
+    // modal, and the thing underneath must not act on them. This is what stops
+    // the playback bend prompt's arrows also stepping Canon to the previous
+    // picture.
+    if (mbox_swallow || kbd_is_key_pressed(KEY_LEFT) ||
+        kbd_is_key_pressed(KEY_RIGHT) || kbd_is_key_pressed(KEY_SET))
+        used = 1;
+
+    // Same handoff core/gui_recui.c uses: returning 1 is what makes
+    // kbd_update_key_state() rebuild physw_status from kbd_mod_state, and the
+    // release is what puts this key into that state as "not pressed".
+    if (used)
+        kbd_key_release_all();
+
+    return used;
 }
 
 int gui_mbox_touch_handler(int sx, int sy)

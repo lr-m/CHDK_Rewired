@@ -227,14 +227,112 @@ void grid_lines_load(const char *fn)
 }
 
 //-------------------------------------------------------------------
+// Is this element's colour a structural one?
+//
+// The colour override used to be all-or-nothing: switch it on and every element
+// of the grid became the one chosen colour, which on a two-tone sight threw away
+// the thing that made it readable - the ACOG's grey tube and its red chevron
+// came out the same flat colour and the reticle vanished into its own housing.
+//
+// So the override now only touches the *coloured* parts. Greys, white, black and
+// the transparent entries are what sights are built out of - housings, posts,
+// shadow outlines - and they stay as the grid author drew them, while anything
+// chromatic takes the user's colour. Pick blue and the ACOG keeps its grey tube
+// and gets a blue chevron.
+//
+// A raw numeric colour in a .grd is a palette byte with no name attached and
+// nothing to classify it by, so it counts as chromatic and gets overridden -
+// which is the more useful answer for something called "override".
+static int grid_structural(int cl)
+{
+    if (!(cl & ~0xff))
+        return 0;
+    switch (cl & 0xff) {
+        case IDX_COLOR_TRANSPARENT:
+        case IDX_COLOR_BLACK:
+        case IDX_COLOR_WHITE:
+        case IDX_COLOR_GREY:
+        case IDX_COLOR_GREY_DK:
+        case IDX_COLOR_GREY_LT:
+        case IDX_COLOR_GREY_DK_TRANS:
+            return 1;
+    }
+    return 0;
+}
+
+//-------------------------------------------------------------------
+// Paint the loaded grid onto the screen.
+//
+// Split out of gui_grid_draw_osd() so the preview can share it. The preview
+// exists to be trusted, which means it has to go through exactly the same
+// resize arithmetic and the same colour rules as the live overlay - a preview
+// drawn its own way is a second implementation to keep in step, and the first
+// time the two disagree the preview is worse than none.
+static void draw_grid_elements(void)
+{
+    int xs=0, xo=0, ys=0, yo=0;
+    gline* ptr;
+    twoColors ucol = user_color(conf.grid_color);
+
+    if (resize) {
+        // Grid aspect ratio is 4:3 - fit to 3:2 or 16:9 as needed and center on screen
+        // Note: assumes aspect ratio of screen dimensions matches display aspect ratio
+        xs = (camera_screen.height * 4) / 3;
+        xo = (camera_screen.width - xs) / 2;
+        ys = camera_screen.height;
+        yo = 0;
+    }
+    for (ptr = head; ptr; ptr = ptr->next) {
+        // Note: elements expect a twoColors even if only one color arg is accepted
+        // in this case clb will be 0
+        // CAM_GRID_ALWAYS_USER_COLOR used to be tested here and it
+        // never once fired: this is module code, and modules do not see
+        // camera.h, so the a480's definition of it was invisible. The
+        // camera it was added for got the behaviour it was added to
+        // avoid. The selective override below is what that flag was
+        // reaching for, and it works the same on every body.
+        twoColors col = conf.grid_force_color
+            ? MAKE_COLOR(grid_structural(ptr->clb)
+                             ? get_script_color(ptr->clb) : BG_COLOR(ucol),
+                         grid_structural(ptr->clf)
+                             ? get_script_color(ptr->clf) : FG_COLOR(ucol))
+            : MAKE_COLOR(get_script_color(ptr->clb),
+                         get_script_color(ptr->clf));
+        int x0 = ptr->x0;
+        int y0 = ptr->y0;
+        int x1 = ptr->x1;
+        int y1 = ptr->y1;
+        if (resize) {
+            x0 = ((x0 * xs + 8192) >> 14) + xo;
+            y0 = ((y0 * ys + 8192) >> 14) + yo;
+            x1 = ((x1 * xs + 8192) >> 14);
+            y1 = ((y1 * ys + 8192) >> 14);
+        }
+        switch (ptr->type) {
+            case GRID_ELEM_LINE:
+                draw_line(x0, y0, x1+xo, y1+yo, col);
+                break;
+            case GRID_ELEM_RECT:
+                draw_rectangle(x0, y0, x1+xo, y1+yo, col, RECT_BORDER1);
+                break;
+            case GRID_ELEM_FILLED_RECT:
+                draw_rectangle(x0, y0, x1+xo, y1+yo, col, RECT_BORDER1|DRAW_FILLED);
+                break;
+            case GRID_ELEM_ELLIPSE:
+                draw_ellipse(x0, y0, (unsigned int)x1, (unsigned int)y1, col, 0);
+                break;
+            case GRID_ELEM_FILLED_ELLIPSE:
+                draw_ellipse(x0, y0, (unsigned int)x1, (unsigned int)y1, col, DRAW_FILLED);
+                break;
+        }
+    }
+}
+
+//-------------------------------------------------------------------
 void gui_grid_draw_osd(int force)
 {
     if (camera_info.state.mode_rec_or_review && conf.show_grid_lines)
     {
-        int xs=0, xo=0, ys=0, yo=0;
-        gline* ptr;
-        twoColors ucol = user_color(conf.grid_color);
-
         if (force || --interval==0) {
             int protect_stats = conf.show_osd &&
                                 camera_info.state.gui_mode_none &&
@@ -242,55 +340,75 @@ void gui_grid_draw_osd(int force)
                                 !kbd_is_key_pressed(KEY_SHOOT_HALF) &&
                                 !kbd_is_key_pressed(KEY_SHOOT_FULL);
             draw_set_grid_clip(protect_stats);
-            if (resize) {
-                // Grid aspect ratio is 4:3 - fit to 3:2 or 16:9 as needed and center on screen
-                // Note: assumes aspect ratio of screen dimensions matches display aspect ratio
-                xs = (camera_screen.height * 4) / 3;
-                xo = (camera_screen.width - xs) / 2;
-                ys = camera_screen.height;
-                yo = 0;
-            }
-            for (ptr = head; ptr; ptr = ptr->next) {
-                // Note: elements expect a twoColors even if only one color arg is accepted
-                // in this case clb will be 0
-                twoColors col =
-#ifdef CAM_GRID_ALWAYS_USER_COLOR
-                    ucol;
-#else
-                    (conf.grid_force_color) ? ucol : MAKE_COLOR(get_script_color(ptr->clb), get_script_color(ptr->clf));
-#endif
-                int x0 = ptr->x0;
-                int y0 = ptr->y0;
-                int x1 = ptr->x1;
-                int y1 = ptr->y1;
-                if (resize) {
-                    x0 = ((x0 * xs + 8192) >> 14) + xo;
-                    y0 = ((y0 * ys + 8192) >> 14) + yo;
-                    x1 = ((x1 * xs + 8192) >> 14);
-                    y1 = ((y1 * ys + 8192) >> 14);
-                }
-                switch (ptr->type) {
-                    case GRID_ELEM_LINE:
-                        draw_line(x0, y0, x1+xo, y1+yo, col);
-                        break;
-                    case GRID_ELEM_RECT:
-                        draw_rectangle(x0, y0, x1+xo, y1+yo, col, RECT_BORDER1);
-                        break;
-                    case GRID_ELEM_FILLED_RECT:
-                        draw_rectangle(x0, y0, x1+xo, y1+yo, col, RECT_BORDER1|DRAW_FILLED);
-                        break;
-                    case GRID_ELEM_ELLIPSE:
-                        draw_ellipse(x0, y0, (unsigned int)x1, (unsigned int)y1, col, 0);
-                        break;
-                    case GRID_ELEM_FILLED_ELLIPSE:
-                        draw_ellipse(x0, y0, (unsigned int)x1, (unsigned int)y1, col, DRAW_FILLED);
-                        break;
-                }
-            }
+            draw_grid_elements();
             draw_set_grid_clip(0);
             interval = GRID_REDRAW_INTERVAL;
         }
     }
+}
+
+//-------------------------------------------------------------------
+// The preview, reached from OSD Parameters -> Grid -> Preview.
+//
+// Full screen and full size rather than a thumbnail beside the menu. The whole
+// question this answers is "what will this look like through the viewfinder",
+// and a reticle shrunk into a corner of the menu does not answer it - these
+// grids are sights, and how much of the frame the housing eats is the thing
+// being judged. So it is drawn at the size it will actually be, over black,
+// and any key puts the menu back.
+static void gui_grid_preview_draw(int force);
+static int  gui_grid_preview_kbd(void);
+void gui_module_menu_kbd_process(void);
+
+static gui_handler GUI_MODE_GRID_PREVIEW =
+    { GUI_MODE_MODULE, gui_grid_preview_draw, gui_grid_preview_kbd,
+      gui_module_menu_kbd_process, 0, 0 };
+
+static int preview_redraw;
+static int preview_running;
+
+static void gui_grid_preview_draw(int force)
+{
+    const char *hint = "Any key to return";
+    int w = camera_screen.width, h = camera_screen.height;
+
+    if (!force && !preview_redraw) return;
+    preview_redraw = 0;
+
+    draw_rectangle(0, 0, w - 1, h - 1, MAKE_COLOR(COLOR_BLACK, COLOR_BLACK),
+                   RECT_BORDER0 | DRAW_FILLED);
+    draw_grid_elements();
+
+    // The title says which file this is, because the menu it was launched from
+    // is no longer on screen to say so.
+    if (conf.grid_title[0])
+        draw_string((w - (int)strlen(conf.grid_title) * FONT_WIDTH) / 2, 2,
+                    conf.grid_title, MAKE_COLOR(COLOR_BLACK, COLOR_WHITE));
+    draw_string((w - (int)strlen(hint) * FONT_WIDTH) / 2, h - FONT_HEIGHT - 2,
+                hint, MAKE_COLOR(COLOR_BLACK, COLOR_GREY));
+}
+
+static int gui_grid_preview_kbd(void)
+{
+    if (kbd_get_autoclicked_key())
+    {
+        preview_running = 0;
+        gui_default_kbd_process_menu_btn();
+    }
+    return 0;
+}
+
+void gui_module_menu_kbd_process(void)
+{
+    preview_running = 0;
+    gui_default_kbd_process_menu_btn();
+}
+
+void gui_grid_preview(void)
+{
+    preview_redraw = 1;
+    preview_running = 1;
+    gui_set_mode(&GUI_MODE_GRID_PREVIEW);
 }
 
 // =========  MODULE INIT =================
@@ -321,7 +439,10 @@ int _module_unloader()
 
 int _module_can_unload()
 {
-    return (conf.show_grid_lines == 0 && !grid_loading);
+    // preview_running matters as much as the other two: the preview is a GUI
+    // mode whose draw and key handlers live in this module, so unloading while
+    // it is on screen frees the code that is about to be called.
+    return (conf.show_grid_lines == 0 && !grid_loading && !preview_running);
 }
 
 /******************** Module Information structure ******************/
@@ -333,7 +454,8 @@ libgrids_sym _libgrids =
     },
 
     gui_grid_draw_osd,
-    grid_lines_load
+    grid_lines_load,
+    gui_grid_preview
 };
 
 ModuleInfo _module_info =

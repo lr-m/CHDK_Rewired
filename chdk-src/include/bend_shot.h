@@ -105,6 +105,31 @@ int bend_shot_save(const char *dir, long num,
                    const bendx_chain_t *c, int bendx_on,
                    const bend_segs_t *s);
 
+// Which picture Canon is currently showing in playback, as its directory and
+// file number - the two halves of the "100-0042" ID it draws itself. Returns 1
+// and fills both when this port can tell, 0 when it cannot.
+//
+// There is no portable way to ask: Canon keeps the playback index in firmware
+// state and nothing in CHDK mirrors it, which is why holding the mode button
+// over a picture has always opened a picker rather than acting on what is on
+// screen. A port that reverses the address gets the direct behaviour; every
+// other port keeps the picker, and this returns 0 there.
+//
+// Numbers rather than a path on purpose. Resolving them means walking A/DCIM,
+// and that walk belongs in modules/bend_picture.c where it costs the resident
+// core image nothing - see the note on the implementation. This end is the only
+// part that needs camera.h, which modules cannot include.
+int playback_current_image_id(int *dir, int *file);
+
+// Make a recipe the live bend - conf, segment prep, chain sanitize, the menu's
+// shadow ints and the preset-list attachment, in the one order that is correct.
+// Every caller that loads a bend from a picture goes through this; see the note
+// on the implementation for what went wrong when two of them did it themselves.
+// Any of b, c and sg may be null to leave that part alone.
+void bend_shot_apply(const bend_t *b, int bend_on,
+                     const bendx_chain_t *c, int bendx_on,
+                     const bend_segs_t *sg);
+
 // Sidecar path for a picture. Any extension is replaced; a path that is
 // already the sidecar comes back unchanged. Returns 0 if it would not fit.
 int bend_shot_path(const char *picture, char *out, int outlen);

@@ -11,6 +11,12 @@
 #include "stdlib.h"
 #include "string.h"
 #include "bend_shot.h"
+#include "conf.h"
+#include "gui.h"
+#include "bend_store.h"
+#include "bend_seg.h"
+#include "camera_info.h"
+#include "dirent.h"
 
 //-------------------------------------------------------------------
 
@@ -281,4 +287,108 @@ int bend_shot_load(const char *picture,
         if (bendx_on) *bendx_on = (flags & BEND_SHOT_F_BENDX) ? 1 : 0;
     }
     return 1;
+}
+
+//-------------------------------------------------------------------
+// Make a recipe the live bend.
+//
+// One function because there were two, and they had drifted. core/gui.c's
+// playback path and modules/bend_picture.c's browser both assigned the same
+// fields, but only the first resynced the menu's shadow ints - and
+// bend_ui_push() runs at the top of every gui_redraw(), writing those shadows
+// straight back into the current segment. A bend loaded from the browser
+// therefore had nine of its fields (trash type and rate, hdiv, vdiv, both
+// taps, bayer, row period, depth) overwritten with whatever was last left in
+// the menu, on the very next redraw. It looked like the load had half worked.
+//
+// Order matters and is the order a preset goes through: assign, then prep,
+// then sanitize - simplify reads nbits - then resync the UI, then detach.
+void bend_shot_apply(const bend_t *b, int bend_on,
+                     const bendx_chain_t *c, int bendx_on,
+                     const bend_segs_t *sg)
+{
+    int i;
+
+    if (b) { conf.bitbend = *b; conf.bitbend_enable = bend_on; }
+
+    // The layout comes back with the matrices, because on a segmented frame
+    // neither half is the record on its own - the same four bends under a
+    // different layout are a different picture.
+    if (sg) conf.bend_segs = *sg;
+
+#ifdef CAM_BEND_EXPERIMENTAL
+    if (c) { conf.bendx = *c; conf.bendx_enable = bendx_on; }
+#else
+    (void)c; (void)bendx_on;
+#endif
+
+    // A recipe carries every matrix itself. Preset slot numbers came from
+    // whatever card wrote it and may have since been deleted or mean something
+    // else here, so they are never restored.
+    for (i = 0; i < BEND_SEG_MAX; i++) conf.bend_segs.slot[i] = 0;
+
+    bend_seg_prep(camera_sensor.bits_per_pixel);
+#ifdef CAM_BEND_EXPERIMENTAL
+    bendx_chain_sanitize(&conf.bendx);
+#endif
+
+    // The half the browser was missing. Without it the next redraw pushes the
+    // stale menu shadows back over what was just loaded.
+    bend_ui_resync();
+
+    // It did not come from a preset on the card, so nothing in the saved list
+    // should still be claiming to be what is loaded.
+    bend_store_detach();
+}
+
+//-------------------------------------------------------------------
+// Which picture Canon is showing in playback, as a directory and file number.
+// See the declaration in bend_shot.h, and tools/newport.py's
+// find_playback_image() for where the four constants come from.
+//
+// Canon identifies the displayed picture by a packed handle held in the
+// playback controller's state. The ID it draws in its own corner - the
+// "100-0042" readout - is built by pulling the directory and file numbers out
+// of that handle with two tiny leaf functions, and those leaves are pure: no
+// memory access, no calls, no side effects. So the port supplies the handle's
+// address and the two (mask, shift) pairs, and the arithmetic happens here
+// rather than by calling into ROM. One word read and two shifts cannot disturb
+// Canon, which matters because this runs while Canon owns the screen.
+//
+// This deliberately stops at the two numbers and does not go on to a path.
+// Turning them into a filename means walking A/DCIM, and that walk plus the
+// message it feeds is around a kilobyte - which the a480 does not have. It runs
+// CHDK out of a 0x32000 ARAM region with a few hundred bytes spare, so the walk
+// lives in modules/bend_picture.c, which is a .flt loaded from the card and
+// costs the core image nothing. What has to be here is only the part that needs
+// camera.h: modules cannot include it, so they cannot see these four constants.
+//
+// Defined on every build rather than under the #ifdef, because the module that
+// calls it is built once for all bodies and cannot test the macro. On a port
+// without the constants this is two instructions returning 0, and the caller
+// falls back to asking which picture was meant.
+//
+// Derived and hardware-tested on the a430. Every other body's constants come
+// from the same detector, which reproduces the a430's exactly.
+int playback_current_image_id(int *dir, int *file)
+{
+#ifdef CAM_PLAYBACK_CURRENT_IMAGE
+    int h = *(volatile int*)CAM_PB_IMAGE_HANDLE;
+    int dn, fn;
+
+    if (!h) return 0;
+    dn = (h & CAM_PB_IMAGE_DIR_MASK)  >> CAM_PB_IMAGE_DIR_SHIFT;
+    fn = (h & CAM_PB_IMAGE_FILE_MASK) >> CAM_PB_IMAGE_FILE_SHIFT;
+
+    // Canon's own limits, which its file-spec parser enforces too. Outside
+    // them this is not a still image - playback has not settled yet, or it is
+    // showing a movie or a sound file.
+    if (dn < 100 || dn > 999 || fn < 1 || fn > 9999) return 0;
+    *dir = dn;
+    *file = fn;
+    return 1;
+#else
+    (void)dir; (void)file;
+    return 0;
+#endif
 }

@@ -88,6 +88,13 @@
 extern void kbd_key_press(long key);
 extern void kbd_key_release(long key);
 extern void kbd_key_release_all();
+
+// Arm "ignore this key until it is physically released", for a GUI mode that
+// closes itself from its own key handler - without it the mode underneath acts
+// on the same press. Implemented in core/kbd_process.c, which also documents
+// the failure it prevents.
+extern void kbd_swallow_until_release(long key);
+extern int  kbd_swallow_blocking(void);
 extern long kbd_is_key_pressed(long key);
 extern long kbd_is_key_clicked(long key);
 extern long kbd_get_pressed_key();

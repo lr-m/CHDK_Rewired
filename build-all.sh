@@ -32,10 +32,22 @@ BIN="$SRC/bin"
 # model  fw    '*' = the firmware that populates cameras/<model>/card/
 #               (every supported target refreshes its card - the marker is kept
 #                because a card tree holds exactly one DISKBOOT.BIN)
+# The a470 is the one body here with more than one ported firmware. 102c is the
+# reference and the one the card tree carries; 101b was re-derived from its own
+# dump and 101a builds from the 101b source (sub/101a/makefile.inc overrides
+# PLATFORMSUB). 100e has no dump behind it, so it builds stock CHDK only - it is
+# here so an A470 on that firmware has something that runs and can dump its ROM.
+#
+# Only one of them can refresh cameras/a470/card/, because a card tree holds
+# exactly one DISKBOOT.BIN. The others land in cameras/a470/builds/ and are
+# copied onto a card by hand.
 SUPPORTED="
 a410 100e *
 a430 100b *
 a460 100d *
+a470 100e
+a470 101a
+a470 101b
 a470 102c *
 a480 100b *
 a540 100b *

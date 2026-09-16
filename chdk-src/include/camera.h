@@ -334,6 +334,99 @@
     #undef  CAM_RECUI_QUALITY_VALS
     #undef  CAM_RECUI_QUALITY_NAMES
 
+    // Leave the UP arrow to Canon on the plain record screen.
+    //
+    // CAM_RECUI blocks UP there by default because on the bodies it was written
+    // for UP opens a stateful selector that never dismisses itself, and taking
+    // a key bound to nothing costs nothing. Define this where UP drives a real
+    // Canon control instead - subject tracking, on the bodies that have it -
+    // since blocking it there deletes a feature of the camera rather than
+    // claiming a free key.
+    // The FUNC menu keeps UP either way; this only concerns the record screen.
+    #undef  CAM_RECUI_UP_IS_CANON
+
+    // Drop the DRIVE control (arrow selector and menu row) or the MY COLOUR
+    // row, for a body where that propcase is not the setting.
+    //
+    // Not a tidiness switch. Check before reaching for either: scan the ROM
+    // for every write of the propcase and see whether any of them is outside
+    // the block that syncs Canon's RecParam structure into propcases. On some
+    // later bodies DRIVE_MODE, MY_COLORS, RESOLUTION and QUALITY have no live
+    // writer at all - they are mirrors the PC protocol fills in, so writing
+    // them changes what reads back and nothing else. A control that cannot
+    // work is worse than one that is absent: Canon's own FUNC menu still has
+    // it, and a CHDK row that silently does nothing is a bug the user carries
+    // around. CAM_RECUI_NO_DRIVE also hands DOWN back to the firmware.
+    #undef  CAM_RECUI_NO_DRIVE
+    #undef  CAM_RECUI_NO_MYCOLOR
+
+    // The port supplies `void recui_apply_image_settings(void)`, called after
+    // the record UI writes RESOLUTION or QUALITY.
+    //
+    // For a body where those propcases are the *input* to a separate apply
+    // call rather than the setting itself. Canon's own FUNC menu on such a
+    // body reads four propcases - image format, quality, resolution, aspect
+    // ratio - and passes them to one firmware function; writing the propcase
+    // without that call leaves the camera using what it last latched, and the
+    // change appears only after a mode change re-reads it. The symptom is a
+    // row whose value reads back correctly while the photographs ignore it.
+    #undef  CAM_RECUI_APPLY_IMAGE
+
+    // Add a diagnostic line to the bottom of the record UI's FUNC menu showing
+    // the raw propcase value for the highlighted row and whether writes are
+    // currently permitted. For bringing the menu up on a new propset, where
+    // "this row does nothing" has several very different causes. Off by
+    // default; it makes the menu one row taller. See recui_draw_menu().
+    #undef  CAM_RECUI_DEBUG
+
+    // Write the record UI's properties through Canon's own rec-parameter
+    // setter instead of SetPropertyCase, on a body where the propcase is a
+    // mirror rather than the setting.
+    //
+    // SetPropertyCase is correct on every port this menu was written for: the
+    // shoot sequence re-reads the property store as the shot starts and cannot
+    // tell who wrote it. On some later bodies it is not - Canon's path applies
+    // the value first and writes the propcase second, so writing the
+    // propcase alone changes what reads back and nothing else. The
+    // symptom is a menu where every row appears to work and only the
+    // photographs disagree.
+    //
+    // The port supplies `int recui_native_set(int prop, int val, int is_signed)`
+    // returning Canon's status (0 = applied).
+    #undef  CAM_RECUI_NATIVE_SET
+
+    // Define where the port can name the picture Canon is displaying in
+    // playback - see playback_current_image_id() in include/bend_shot.h, which
+    // the port then supplies.
+    //
+    // With it, holding the mode button over a picture offers to load that
+    // frame's bend and, on yes, applies it and returns you to playback.
+    // Without it there is no way to know which frame is on screen, so the same
+    // gesture opens the picture browser to ask, which stays the fallback for
+    // any body whose handle has not been reversed.
+    //
+    // Defined by the a430 (hand-derived and hardware-confirmed), the a460
+    // (detector output alone, confirmed on the camera), the a470 on every
+    // ported firmware, the a480 and the a640.
+    //
+    // Only the handle read stays in the core image; the A/DCIM walk and the
+    // message live in modules/bend_picture.c, which is a .flt loaded from the
+    // card. That split is the a480's doing - it is an ARAM build with a few
+    // hundred bytes spare and the whole feature resident cost about a
+    // kilobyte - but every body gets the saving.
+    #undef  CAM_PLAYBACK_CURRENT_IMAGE
+
+    // The four constants that feed it, all derived from Canon's own
+    // "%03d-%04d" ID drawer. CAM_PB_IMAGE_HANDLE is the address of the word
+    // holding Canon's handle for the displayed picture; the masks and shifts
+    // unpack the directory and file numbers out of it. Defining
+    // CAM_PLAYBACK_CURRENT_IMAGE without all four will not build.
+    #undef  CAM_PB_IMAGE_HANDLE
+    #undef  CAM_PB_IMAGE_DIR_MASK
+    #undef  CAM_PB_IMAGE_DIR_SHIFT
+    #undef  CAM_PB_IMAGE_FILE_MASK
+    #undef  CAM_PB_IMAGE_FILE_SHIFT
+
     // Address of Canon's "clock is valid" word, held at 1 by spytask so the
     // date/time screen does not appear on every boot with a dead backup battery.
     //

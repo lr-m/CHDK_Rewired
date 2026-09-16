@@ -9,6 +9,11 @@
 // Symbols to be exported should be on separate lines. Blank lines and '//' style comments are allowed
 // (Despite the name, this is not a C source file. File should probably be renamed.)
 
+            kbd_swallow_until_release
+            bend_shot_apply
+            playback_current_image_id
+            &bend_pic_exit_on_load
+            gui_set_alt_mode_state
             module_get_adr
             module_exit_alt
             module_run
@@ -31,6 +36,7 @@
             &libshothisto
 
             &altGuiHandler
+            &defaultGuiHandler
             &camera_info
             &camera_screen
             &camera_sensor
@@ -165,6 +171,10 @@
             user_color
             get_script_color
             gui_set_mode
+            // Lets bendpic.flt close bend mode's browser panel behind itself
+            // after loading a bend. A no-op when bend mode is not open, which
+            // is the playback-prompt route into the same module.
+            gui_bend_exit
             gui_default_kbd_process_menu_btn
             get_batt_perc
             gui_mbox_init

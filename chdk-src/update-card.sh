@@ -76,6 +76,11 @@ cp "$SRC_MODULES/"*.flt "$CARD/CHDK/MODULES/"
 
 echo "==> $SRC_GRIDS/ -> $CARD/CHDK/GRIDS/"
 mkdir -p "$CARD/CHDK/GRIDS"
+# Prune first, as the modules above do. A plain copy never removes anything, so
+# a grid retired from the source tree stayed on every card and in the camera's
+# "Load grid from file..." list forever - which is how a deleted unicorn and six
+# archived stock grids outlived their deletion.
+rm -f "$CARD/CHDK/GRIDS/"*.grd
 cp -r "$SRC_GRIDS/." "$CARD/CHDK/GRIDS/"
 
 echo "==> $SRC_SCRIPTS/ -> $CARD/CHDK/SCRIPTS/"

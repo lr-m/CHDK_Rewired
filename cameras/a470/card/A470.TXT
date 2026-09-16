@@ -1,7 +1,7 @@
 CHDK Rewired - PowerShot A470
 firmware: 102c
 
-DISKBOOT.BIN md5 67697694c08cada3c0f68fd6663118ef
+DISKBOOT.BIN md5 d1f7e1e776b9213ba836cfcc4ac4b6c5
 
 Bend mode, persistent OSD, record UI, custom sounds, custom boot screen.
 

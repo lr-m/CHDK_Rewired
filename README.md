@@ -36,9 +36,10 @@ On top of everything stock CHDK already does:
 | **Multiple exposure** | several frames developed into one, additive or averaged, with a live ghost of what is already there |
 | **Persistent OSD** | a two-field, per-element-coloured status overlay that survives the half-press and mode changes |
 | **Record UI** | size, quality and drive mode changed from the shooting screen without leaving it |
-| **Sidecar tagging** | every photo gets a file recording exactly what it was bent with, so a frame you like can be reproduced |
+| **Shot recipes** | every photo carries the bend it was taken with, written into the JPEG itself as a comment segment, so it survives being copied off the card. A sidecar file beside the photo is still selectable |
+| **Bend from a photo** | in playback, hold the `<ALT>` button over a picture and the bend that made it becomes the live one. A thumbnail browser, drawn into the camera's own viewport, is both the fallback and the way to go looking through the card |
 | **Game Boy player** | a Game Boy / Game Boy Color emulator, including the Game Boy Camera cartridge wired to the live viewport |
-| **Themes and grids** | five palettes that recolour everything this fork draws, plus custom reticles and framing grids |
+| **Themes and grids** | five palettes that recolour everything this fork draws, plus thirteen reticles and a set of framing grids, each previewable full-screen from the menu |
 | **Custom boot screens** | Canon's ROM startup image replaced, per body |
 
 ## Supported cameras
@@ -55,9 +56,11 @@ On top of everything stock CHDK already does:
 
 ¹ This ROM carries no startup image to replace. ² With a boot animation.
 
+The A470 is the one body here with more than one ported firmware. `102c` is the reference, and the one the release package carries. `101b` has had every reversed address re-derived from its own ROM dump and `101a` builds from the same source, but neither has been run on a camera yet — build them from source with `./build-all.sh a470` if you have that body and fancy being the first. `100e` has no dump behind it and builds stock CHDK only, which is enough to reach *Debug → Dump ROM to card*.
+
 > ⚠️ **The A410 is not stable.** It intermittently shuts down with an E16 error — on the shutter press, on taking a picture, or with a black live view on power-on. It is a shutdown, not damage: pull the card and the camera is stock again. The cause is a sensor FIFO overrun that seven separate attempted fixes failed to cure, and it may well be a tired sensor rather than this software. It ships anyway in case someone with an A410 in a drawer fancies a go — just don't rely on it.
 
-Multiple exposure, segments, presets, sidecar tagging, the Game Boy player, themes and grids are available on every camera in the table.
+Multiple exposure, segments, presets, shot recipes, bend-from-a-photo, the Game Boy player, themes and grids are available on every camera in the table.
 
 **Firmware version is a hard gate.** Each build is compiled against one exact firmware revision, the one in the table and no other. On anything else CHDK will not load at all, and cameras of the same model shipped with different firmware. Step 1 below is how to check yours; do it before anything else.
 
@@ -81,14 +84,15 @@ Each build here is compiled against **one exact firmware revision**, and on any 
 
 Two need checking, because they shipped in more than one version and you cannot tell which you have from the model name:
 
-* **A470** — shipped as `1.00E`, `1.01A`, `1.01B` and `1.02C`. Only **`1.02C`** is supported here.
+* **A470** — shipped as `1.00E`, `1.01A`, `1.01B` and `1.02C`. The download below is **`1.02C`**. `1.01B` and `1.01A` are also ported and build from source (`./build-all.sh a470`), but no one has yet run that build on a camera, so it is not packaged — see the note under the table.
 * **A410** — shipped as `1.00E` and `1.00F`. Only **`1.00E`** is supported here.
 
 If you have one of those two, check before you go any further.
 
-1. Put any SD card in the camera and switch it on in **PLAY** mode (the blue triangle, not the shooting mode).
-2. Hold down **FUNC./SET** and, while holding it, press **DISP.**
-3. A line of small text appears at the bottom of the screen. Among the product code and region letters it contains **Firmware Ver** followed by the version, `GM1.00B` for instance.
+1. Copy `vers.req` and `ver.req` onto any SD card. Both are in the download from step 2, so fetch that first; they are empty marker files, and which of the two names a body looks for varies, so copy both.
+2. Put the card in the camera and switch it on in **PLAY** mode (the blue triangle, not the shooting mode).
+3. Hold down **FUNC./SET** and, while holding it, press **DISP.**
+4. A line of small text appears at the bottom of the screen. Among the product code and region letters it contains **Firmware Ver** followed by the version, `GM1.00B` for instance.
 
 The part you want is the number after **Firmware Ver**. `GM1.00B` means firmware `100b`; `1.02C` means `102c`. Compare it with your camera's row:
 
@@ -121,6 +125,8 @@ flash-card-macos.sh
 flash-card-windows.ps1
 READ_ME_FIRST.txt           a short version of these instructions
 vers.req                    used by the firmware check in step 1
+ver.req                     the same marker under the other name some
+                            bodies look for; copy both
 SHA256SUMS.txt              checksums, ignore unless you want them
 ```
 
@@ -226,7 +232,6 @@ Card contents:
 A480.TXT
 CHDK
 DISKBOOT.BIN
-PS.FIR
 camnotes.txt
 changelog.txt
 readme.txt
@@ -322,8 +327,8 @@ Type `ERASE` in capitals and press Enter:
 ==> mounting and copying CHDK
 
 Card contents:
-A480.TXT	CHDK		DISKBOOT.BIN	PS.FIR
-camnotes.txt	changelog.txt	readme.txt	vers.req
+A480.TXT	CHDK		DISKBOOT.BIN	camnotes.txt
+changelog.txt	readme.txt	vers.req
 
 OK - card is bootable (BOOTDISK signature verified) and safe to remove.
 ```
@@ -422,7 +427,7 @@ Type `ERASE` in capitals and press Enter:
 ==> copying CHDK
 
 Card contents:
-A480.TXT  CHDK  DISKBOOT.BIN  PS.FIR  camnotes.txt  changelog.txt  readme.txt  vers.req
+A480.TXT  CHDK  DISKBOOT.BIN  camnotes.txt  changelog.txt  readme.txt  vers.req
 
 OK - card is bootable (BOOTDISK signature verified).
 
@@ -472,6 +477,7 @@ Then, from the root of this repository:
 ./build-all.sh a480 a470       # just these models
 ./build-all.sh -n              # dry run - print what would happen
 ./build-all.sh --no-dist       # build only, leave dist/ alone
+./build-all.sh --with-roms     # put whatever is in CHDK/GBC/ into the card zips
 ```
 
 Each target is built, copied to `cameras/<model>/builds/`, and used to refresh `cameras/<model>/card/` and that camera's package in `dist/`. `dist/` is output only, so delete the whole thing and it comes back.

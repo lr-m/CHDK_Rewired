@@ -36,6 +36,16 @@ enum ALT_Mode_State {
 };
 
 extern void gui_set_alt_mode_state(int);    // Called from KBD task to tell GUI task what state to set
+
+// bend -> the bend menu's shadow ints. bend_ui_push() writes those shadows back
+// into the live bend on every redraw, so anything that rewrites the bend whole
+// must call this or be partly undone one frame later. See bend_shot_apply().
+extern void bend_ui_resync(void);
+
+// Open the bend-picture browser. exit_on_load 1 closes it once a bend has been
+// loaded (the gallery prompt), 0 returns to the album (the CHDK menu and bend
+// mode's SAVED tab). See bend_pic_exit_on_load in core/gui.c.
+extern void bend_pic_open(int exit_on_load);
 extern void gui_activate_alt_mode();        // Called from GUI task to set ALT mode
 
 #define GUI_MODE_MAGICNUM	0xd36c1559
@@ -112,5 +122,11 @@ extern const char* flash_power_mode_string();
 extern const char* flash_exp_comp_modes_string();
 
 //------------------------------------------------------------------- 
+
+// The record screen's ownership latch, for bodies where one key is left to
+// Canon (CAM_RECUI_UP_IS_CANON). Defined in core/gui.c; stubbed to 0 / no-op on
+// every other build so callers need no #ifdef.
+int  posd_canon_active(void);
+void posd_canon_hold_set(int on);
 
 #endif

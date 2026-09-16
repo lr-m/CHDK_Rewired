@@ -270,3 +270,21 @@
     #define CAM_DEFAULT_MENU_CURSOR_FG  IDX_COLOR_WHITE    // Override menu cursor colors
 
     #define CAM_IS_VID_REC_WORKS                1   // is_video_recording() function works
+
+    // The picture Canon is showing in playback, so holding the mode button
+    // over one loads that frame's bend directly instead of opening the browser
+    // to ask which frame was meant. core/bend_shot.c does the rest.
+    //
+    // From tools/newport.py's find_playback_image(): the handle lives at
+    // state 0x6cf50 + 0xc, and the two extractors Canon's own "%03d-%04d" ID
+    // drawer (0xffdb06e8) calls are at 0xffc24368 and 0xffc2437c.
+    //
+    // Detector-derived, not yet on a body. The same detector reproduces
+    // the a430's hardware-tested value exactly, which is why it is
+    // trusted here, but the first boot on this camera is still the proof.
+    #define CAM_PLAYBACK_CURRENT_IMAGE      1
+    #define CAM_PB_IMAGE_HANDLE             0x06cf5c
+    #define CAM_PB_IMAGE_DIR_MASK           0x1fffffff
+    #define CAM_PB_IMAGE_DIR_SHIFT          18
+    #define CAM_PB_IMAGE_FILE_MASK          0x0003fff0
+    #define CAM_PB_IMAGE_FILE_SHIFT         4

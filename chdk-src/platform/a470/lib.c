@@ -1,16 +1,20 @@
 #include "platform.h"
 #include "lolevel.h"
 
-// 102c only. refresh_physical_screen_blocked is a raw RAM address derived from
-// the 102c dump (the only a470 firmware we have one for), so it is DEF'd in
-// sub/102c/stubs_min.S and nowhere else. On 100e/101a/101b these three
-// functions are left undefined and the weak defaults in
+// 102c and 101b. refresh_physical_screen_blocked is a raw RAM address derived
+// from a dump, so it is DEF'd in sub/102c/stubs_min.S and sub/101b/stubs_min.S
+// with a different value in each - 0xa420 and 0xa3d0 - and nowhere else. 101a
+// builds from the 101b source and so gets the 101b value; see the note in
+// platform_camera.h about that.
+//
+// On 100e these three functions are left undefined and the weak defaults in
 // platform/generic/wrappers.c apply instead: vid_bitmap_refresh() calls
 // _RefreshPhysicalScreen(1) and the two update hooks are no-ops. That is the
-// pre-overlay-fix behaviour - those subs flicker, but they build and run.
-// To enable the fix on another revision, re-derive the flag address from a dump
-// of that firmware; see docs/OVERLAY_FLICKER.md.
-#ifdef CAMERA_a470_102c
+// pre-overlay-fix behaviour - that sub flickers, but it builds and runs.
+// To enable the fix there too, re-derive the flag address from a dump of that
+// firmware; see docs/OVERLAY_FLICKER.md and docs/A470_101B_PORTING.md, which
+// records how it was re-derived for 101b.
+#if defined(CAMERA_a470_102c) || defined(CAMERA_a470_101b)
 
 // Canon repaints its own OSD straight into the bitmap buffer CHDK draws in, so
 // every repaint wipes whatever CHDK had put there until the next spytask redraw
@@ -42,7 +46,7 @@ void vid_turn_on_updates()
     vid_bitmap_refresh();
 }
 
-#endif // CAMERA_a470_102c
+#endif // CAMERA_a470_102c || CAMERA_a470_101b
 
 char *hook_raw_image_addr()
 {

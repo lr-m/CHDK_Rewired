@@ -17,11 +17,30 @@ set -euo pipefail
 MODEL="a640"
 HERE="$(dirname "$(readlink -f "$0")")"
 
+# --allow-64k-clusters: let the FAT16 volume use 64KiB clusters, which is the
+# only way a card between roughly 2GB and 4GB fits in one FAT16 partition.
+#
+# Off by default and deliberately awkward to reach, because 64KiB clusters are
+# a FAT16 extension and the older boot ROMs reject them outright - a PowerShot
+# A470 will not power on at all from a card formatted this way, while an A480
+# reads it fine. Which side of that line any given body falls on is only
+# knowable by trying it, and the failure looks like a dead camera rather than
+# an error message. Use a 2GB card unless you are deliberately testing this.
+ALLOW_64K=0
+ARGS=()
+for a in "$@"; do
+    case "$a" in
+        --allow-64k-clusters) ALLOW_64K=1 ;;
+        *) ARGS+=("$a") ;;
+    esac
+done
+set -- ${ARGS+"${ARGS[@]}"}
+
 DEV="${1:-}"
 SRC="${2:-}"
 
 if [[ -z "$DEV" ]]; then
-    echo "usage: sudo $0 /dev/sdX [source-dir-or-zip]" >&2
+    echo "usage: sudo $0 /dev/sdX [source-dir-or-zip] [--allow-64k-clusters]" >&2
     echo "   eg: sudo $0 /dev/sde" >&2
     echo >&2
     echo "Run 'lsblk -o NAME,SIZE,RM,MODEL' first and be certain which one is the card." >&2
@@ -67,8 +86,11 @@ fi
 BYTES=$(blockdev --getsize64 "$DEV")
 GB=$(( BYTES / 1000000000 ))
 if (( BYTES > 4294967296 )); then
-    echo "error: $DEV is ${GB}GB. FAT16 tops out at 4GB, and this camera cannot read" >&2
-    echo "       SDHC at all. Use a 2GB card or smaller." >&2
+    # The ceiling here is this script's own single FAT16 partition, not the
+    # camera: say that rather than assert anything about SDHC support, which
+    # varies across bodies.
+    echo "error: $DEV is ${GB}GB. This script writes one FAT16 partition, and" >&2
+    echo "       FAT16 tops out at 4GB. Use a 2GB card or smaller." >&2
     exit 1
 fi
 
@@ -104,8 +126,10 @@ PART="${DEV}1"
 # older boot ROMs reject - a PowerShot A470 will not power on at all from a card
 # formatted that way, while an A480 reads it fine.
 PART_SECTORS=$(( (BYTES - 1048576) / 512 ))
+TRIES="4 8 16 32 64"
+[[ "$ALLOW_64K" -eq 1 ]] && TRIES="$TRIES 128"
 SPC=0
-for try in 4 8 16 32 64; do
+for try in $TRIES; do
     if [ $(( PART_SECTORS / try )) -lt 65524 ]; then
         SPC=$try
         break
@@ -113,8 +137,17 @@ for try in 4 8 16 32 64; do
 done
 if [ "$SPC" -eq 0 ]; then
     echo "error: ${GB}GB needs >32KiB clusters to fit FAT16, which old cameras" >&2
-    echo "       reject. Use a card of 2GB or less." >&2
+    echo "       reject. Use a card of 2GB or less, or pass --allow-64k-clusters" >&2
+    echo "       to try 64KiB clusters anyway (see the note at the top)." >&2
     exit 1
+fi
+if [ "$SPC" -eq 128 ]; then
+    echo
+    echo "WARNING: using 64KiB clusters. This is a FAT16 extension that some of" >&2
+    echo "         these boot ROMs refuse - if the camera will not power on from" >&2
+    echo "         this card, that is why, and a 2GB card is the fix. The card" >&2
+    echo "         itself is fine; take it out and the camera is stock again." >&2
+    echo
 fi
 echo "==> formatting $PART as FAT16 ($(( SPC * 512 / 1024 ))KiB clusters, $(( PART_SECTORS / SPC )) clusters)"
 # Volume label: RWD_<model>.

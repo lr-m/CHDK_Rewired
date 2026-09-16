@@ -201,3 +201,22 @@
     // Entry of the StartupImage task, replaced in createHook so we run before
     // Canon allocates and draws. See sub/100b/boot.c.
     #define CAM_STARTUP_IMAGE_TASK          0xffd61e4c
+
+    // The picture Canon is showing in playback, so holding the mode button over
+    // one loads that frame's bend directly instead of opening the browser to ask
+    // which frame was meant. core/bend_shot.c does the rest.
+    //
+    // Hand-derived from Canon's own "%03d-%04d" ID drawer at 0xffd8dccc: the two
+    // `ldr r0,[r6,#12]; bl <extractor>` pairs before its sprintf give the field
+    // and the unpacking, and r6 is SinglePlayController's state at 0x0007acb0.
+    // The extractors are 0xffc23dd0 (directory) and 0xffc23de4 (file), both pure
+    // leaves, so the arithmetic is done in CHDK rather than called into ROM.
+    //
+    // Confirmed on the camera, and the reference tools/newport.py's
+    // find_playback_image() is validated against.
+    #define CAM_PLAYBACK_CURRENT_IMAGE      1
+    #define CAM_PB_IMAGE_HANDLE             0x0007acbc
+    #define CAM_PB_IMAGE_DIR_MASK           0x1fffffff
+    #define CAM_PB_IMAGE_DIR_SHIFT          18
+    #define CAM_PB_IMAGE_FILE_MASK          0x0003fff0
+    #define CAM_PB_IMAGE_FILE_SHIFT         4

@@ -1226,7 +1226,7 @@ static void bm_browse_pick(void)
         if (bm_bsel == BM_BR_IMAGE)
         {
             bm_erase_all();
-            module_run("bendpic.flt");
+            bend_pic_open(0);   // shooting: come back to the album
             return;
         }
         if (bm_bsel == BM_BR_OFF)  { bm_saved_off();   return; }
@@ -2962,5 +2962,17 @@ static int bm_kbd_process(void)
 
 gui_handler bendGuiHandler =
     { GUI_MODE_MODULE, bm_draw, bm_kbd_process, 0, 0, 0 };
+
+#else  // !CAM_BEND_MODE
+
+// The module export table lists gui_bend_exit unconditionally - it is parsed
+// by tools/makeexport.c, not by the C preprocessor, so it cannot be made to
+// follow this #ifdef. A body built without bend mode (the stock a530 and a650
+// dump builds) still has to supply the symbol or the hash list fails to link.
+//
+// Nothing to close on such a body, and bendpic.flt's call is harmless there:
+// on a camera with no bend mode there is no browser panel behind it either.
+#include "gui.h"
+void gui_bend_exit(void) {}
 
 #endif // CAM_BEND_MODE

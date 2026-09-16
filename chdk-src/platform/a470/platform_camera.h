@@ -106,34 +106,47 @@
     // up. If retried, move the call much later in startup and test it alone.
     //#define CAM_SET_DATE_ON_BOOT          1
 
-    // Date/time screen suppression, traced in the 102c decompilation.
-    //   clock struct   = *(0xffc2f5c0) = 0x2284, valid flag at +0xc  -> 0x2290
-    //   uictrl struct  = *(0xffc19fc8) = 0x1d18, asked latch at +0x34 -> 0x1d4c
-    // Gate is FUN_ffc19cd0, getter FUN_ffc2f70c, screen FUN_ffc588a0.
-    // Both are firmware version specific - re-derive for any other build.
-    // spytask writes to these addresses directly, so they must stay gated to the
-    // firmware they were traced on. 102c is the only a470 revision with a dump;
-    // on 100e/101a/101b the date screen is simply not suppressed.
+    // Date/time screen suppression, traced in the 102c decompilation and
+    // re-derived on 101b by tools/newport.py's DateTimeMenu gate detector - the
+    // same detector reproduces the 102c pair below exactly, which is what makes
+    // its 101b answer worth having. See docs/A470_101B_PORTING.md.
+    //
+    //   102c  clock struct = *(0xffc2f5c0) = 0x2284, valid flag at +0xc -> 0x2290
+    //   101b  same gate at 0xffc19cd0, clock getter returns             -> 0x2274
+    //   both  uictrl struct = 0x1d18, asked latch at +0x34              -> 0x1d4c
+    //
+    // Gate is FUN_ffc19cd0 on both images. Both values are firmware version
+    // specific - re-derive for any other build. spytask writes to these
+    // addresses directly, so they must stay gated to the firmware they were
+    // traced on. 100e has no dump, and there the date screen is simply not
+    // suppressed.
+    #if defined(CAMERA_a470_102c) || defined(CAMERA_a470_101b)
     #ifdef CAMERA_a470_102c
     #define CAM_CLOCK_VALID_FLAG            0x2290
+    #else
+    #define CAM_CLOCK_VALID_FLAG            0x2274
+    #endif
+    // The latch is the same word on both images: the uictrl struct did not move.
     #define CAM_DATE_PROMPT_LATCH           0x1d4c
 
     // Canon's My Camera sound slots, repointed at A/CHDK/SOUNDS/*.wav after
-    // the card is up. Gated to 102c for the same reason as the two addresses
-    // above: platform/a470/wrappers.c writes to a RAM table and calls a ROM
-    // function, both traced in this firmware's decompilation and neither
-    // re-derived for the revisions without a dump. See the long note there
-    // for the three checks the addresses passed, and for the one thing about
-    // this that a body still has to confirm - which slot is which.
+    // the card is up. Gated for the same reason as the two addresses above:
+    // platform/a470/wrappers.c writes to a RAM table and calls a ROM function,
+    // and both are firmware specific. They are now carried per revision there,
+    // the 101b pair re-derived from its own dump against the same three checks
+    // the 102c pair passed. See the long note in wrappers.c, and for the one
+    // thing about this that a body still has to confirm - which slot is which.
+    // 102c is the revision where that was settled on hardware.
     #define CAM_CUSTOM_SOUNDS               1
 
-    // The boot screen is now a marker-tagged slot in the core image rather than
-    // a fixed array (sub/102c/boot_image.h, tools/mkbootslot.py), so the
-    // on-camera importer can rewrite it inside DISKBOOT.BIN. This is what puts
+    // The boot screen is a marker-tagged slot in the core image rather than a
+    // fixed array (sub/<fw>/boot_image.h, tools/mkbootslot.py), so the on-camera
+    // importer can rewrite it inside DISKBOOT.BIN. This is what puts
     // "Boot screen -> Import JPG/PNG" in CHDK Settings, as on the A480.
     //
-    // Inside the 102c gate because only that revision has the dump, and so only
-    // that revision has the startup-image hook the slot feeds.
+    // Inside the gate because it needs the startup-image hook in sub/<fw>/boot.c,
+    // which needs task_StartupImage and the My Camera init/table addresses - all
+    // three of them dump-derived. 100e has no dump and so has no hook.
     #define CAM_CUSTOM_BOOT_IMAGE           1
 
     // Preserve the ownership model of the archived, hardware-tested A470 OSD:
@@ -158,8 +171,16 @@
     // _ExitActionReview (FUN_ffc62828), and read as a state guard by five other
     // functions.
     //
-    // Firmware-specific. This number is for 102c and nothing else.
-    #define CAM_REVIEW_ACTIVE_FLAG          0x5b4c
+    // Firmware-specific. The ShootCon base is what moves between revisions, not
+    // the +0x70 offset: on 101b _ExitActionReview is at 0xffc6230c and is
+    // instruction-for-instruction identical to 102c's 0xffc62828, and its base
+    // literal reads 0x5ab4 rather than 0x5adc. Same derivation, both numbers
+    // read out of their own image - see docs/A470_101B_PORTING.md.
+    #ifdef CAMERA_a470_102c
+    #define CAM_REVIEW_ACTIVE_FLAG          0x5b4c   // 0x5adc + 0x70
+    #else
+    #define CAM_REVIEW_ACTIVE_FLAG          0x5b24   // 0x5ab4 + 0x70
+    #endif
 
     // ...and with the level test gone, the *edge* is what holds the plates off
     // the review. TIMEOUT_OWNS_REVIEW on its own left nothing but the 2500ms
@@ -191,10 +212,52 @@
     // Define it again on whichever body is being chased.
     // #define CAM_POSD_GATE_DEBUG          1
 
+    // The picture Canon is showing in playback, so holding the mode button over
+    // one loads that frame's bend directly instead of opening the browser to ask
+    // which frame was meant. core/bend_shot.c does the rest.
+    //
+    // Firmware specific, like everything else in this block. Found by following
+    // the argument up the call chain rather than by looking for a global near
+    // the ID drawer: on this body the drawer is handed its state, and the state
+    // is referenced by exactly two literals in the whole image, so nothing local
+    // to the drawer mentions it. Confirmed against cameras/a470/ghidra - both
+    // callers of FUN_ffd45c70 pass DAT_ffd3e4c4 / DAT_ffd3fa08, and both read
+    // 0x00049020 - and independently by tools/newport.py, which derives the same
+    // address from the instruction stream alone.
+    //
+    // 0xc is the field, and the decompilation corroborates what it is: at
+    // FUN_ffd3c5xx the code compares *(state + 0xc) against *(state + 0x48),
+    // which is the "has the displayed picture changed" test.
+    #define CAM_PLAYBACK_CURRENT_IMAGE      1
+    #ifdef CAMERA_a470_102c
+    #define CAM_PB_IMAGE_HANDLE             0x0004902c   // state 0x00049020 + 0xc
+    #else
+    #define CAM_PB_IMAGE_HANDLE             0x00048fac   // state 0x00048fa0 + 0xc
+    #endif
+    // The unpacking is the same on both: this generation extracts with a pair
+    // of shifts (lsl #4 / lsr #22 and lsl #14 / lsr #18) rather than the masks
+    // the VxWorks bodies use, which is why the file mask keeps its low nibble -
+    // those bits are shifted out anyway.
+    #define CAM_PB_IMAGE_DIR_MASK           0x0fffffff
+    #define CAM_PB_IMAGE_DIR_SHIFT          18
+    #define CAM_PB_IMAGE_FILE_MASK          0x0003ffff
+    #define CAM_PB_IMAGE_FILE_SHIFT         4
+
     // Startup is replaced in the early StartupImage task, before Canon plays
     // entry 1. Do not enable the later generic CHDK beep as well.
 
-#endif
+    // A note on 101a. It has no dump of its own; camera_info.csv aliases it to
+    // 101b and sub/101a/makefile.inc overrides PLATFORMSUB to 101b, so a 101a
+    // build compiles the 101b source and gets CAMERA_a470_101b - and therefore
+    // everything in this block. That is not new with these features: the task
+    // addresses patched by sub/101b/boot.c's taskCreateHook have always been
+    // 101b's, and those are the ones that decide whether the camera boots at
+    // all. The two images are treated as one throughout the tree, and the 101b
+    // bin_compat.h accepts both "GM1.01B" and "GM1.01A" at one ROM address.
+    // Worth knowing before a 101a body is the first thing anything here is
+    // tested on.
+
+#endif  // CAMERA_a470_102c || CAMERA_a470_101b
 
     // Bend mode - the patchbay on the shooting screen. See BENDING_DESIGN.md
     // section 4 and core/gui_bend.c. Entered by holding the ALT button (Print)

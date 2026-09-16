@@ -11,8 +11,8 @@
 // allocated for the rest of the boot.
 //
 // Both addresses are from tools/newport.py and then checked three ways
-// against cameras/a470/ghidra/, because a wrong table base here is a pointer
-// written into arbitrary RAM:
+// against the ROM image, because a wrong table base here is a pointer written
+// into arbitrary RAM. On 102c, against cameras/a470/ghidra/:
 //
 //   FUN_ffc45d04 asserts through s_MyCamFunc_c_ffc45ee0, so it is MyCamFunc.c
 //   it guards on a flag and fills six entries of {buffer, size} at a 16 byte
@@ -21,6 +21,13 @@
 //     image - the address newport reported - and the size it writes into
 //     entry 0 is 0x47fa, which is the startup JPEG size newport reported
 //     separately
+//
+// 101b is the same function at 0xffc457e8 and passes the same three checks on
+// its own image: "MyCamFunc.c" sits in its literal pool, it guards on the flag
+// at 0xffc459d4 (0x5260) and fills the same six 16-byte entries, and its table
+// base literal at 0xffc459dc reads 0x000193f4 beside an entry-0 size of 0x47fa
+// - the length of the ROM JPEG its next literal points at, 0xffe51d90. Nothing
+// is copied across; see docs/A470_101B_PORTING.md.
 //
 // On slot order, and on getting it wrong once. The init registers three
 // entries by ID, and the IDs are not the entry numbers:
@@ -38,8 +45,13 @@
 // shutter and entry 3 is the button here exactly as on the A480, whatever ID
 // each is registered under. The permutation is real, it is just not about
 // this. Confirmed on hardware, which is the only reason it is stated flatly.
+#ifdef CAMERA_a470_102c
 #define A470_MYCAM_TABLE ((unsigned *)0x00019434)
 #define A470_MYCAM_INIT  ((void (*)(void))0xffc45d04)
+#else   // CAMERA_a470_101b - and 101a, which builds from it
+#define A470_MYCAM_TABLE ((unsigned *)0x000193f4)
+#define A470_MYCAM_INIT  ((void (*)(void))0xffc457e8)
+#endif
 
 static unsigned a470_le16(const unsigned char *p)
 {
@@ -71,7 +83,8 @@ static int a470_valid_sound(const unsigned char *p, int size)
 int platform_load_custom_sounds(void)
 {
     // Indexed by table entry, not by ID - see the slot note above. Entry 1 is
-    // replaced before Canon's startup worker in sub/102c/boot.c.
+    // Canon's startup sound, left alone by sub/<fw>/boot.c and played from the
+    // card through entry 2 at the foot of this function instead.
     static const char * const names[4] = {
         0,
         "A/CHDK/SOUNDS/shutter.wav",    // entry 2

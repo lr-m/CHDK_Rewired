@@ -1722,11 +1722,20 @@ static void gui_grid_lines_load(__attribute__ ((unused))int arg)
     libfselect->file_select(LANG_STR_SELECT_GRID_FILE, conf.grid_lines_file, "A/CHDK/GRIDS", gui_grid_lines_load_selected);
 }
 
+// Show the loaded grid at full size, so "what does this one look like" does not
+// mean leaving the menu, going back to the shooting screen and coming back.
+static void gui_grid_preview(__attribute__ ((unused))int arg)
+{
+    if (libgrids)
+        libgrids->gui_grid_preview();
+}
+
 static CMenuItem grid_submenu_items[] = {
     MENU_ITEM(0x2f,LANG_MENU_SHOW_GRID,         MENUITEM_BOOL,      &conf.show_grid_lines, 0 ),
     MENU_ITEM(0x35,LANG_MENU_GRID_LOAD,         MENUITEM_PROC,      gui_grid_lines_load, 0 ),
     MENU_ITEM(0x0,LANG_MENU_GRID_CURRENT,       MENUITEM_SEPARATOR, 0, 0 ),
     MENU_ITEM(0x0,(int)conf.grid_title,         MENUITEM_TEXT,      0, 0 ),
+    MENU_ITEM(0x35,(int)"Preview",              MENUITEM_PROC,      gui_grid_preview, 0 ),
     MENU_ITEM(0x0,(int)"",                      MENUITEM_SEPARATOR, 0, 0 ),
     MENU_ITEM(0x5c,LANG_MENU_GRID_FORCE_COLOR,  MENUITEM_BOOL,      &conf.grid_force_color, 0 ),
     MENU_ITEM(0x65,LANG_MENU_GRID_COLOR_LINE,   MENUITEM_COLOR_FG,  &conf.grid_color, 0 ),
@@ -1792,11 +1801,20 @@ static void gui_menu_dump_palette(__attribute__ ((unused))int arg)
     sprintf(line, "mode: %s\n\n", camera_info.state.mode_rec ? "record" : "playback");
     write(fd, line, strlen(line));
 
-    write(fd, "entry  bytes        AYUV -> RGB\n", 32);
+    write(fd, "entry  V  U  Y  op    RGB\n", 26);
     for (i = 0; i * 4 + 3 < size; i++)
     {
-        int a = pal[i*4], y = pal[i*4+1];
-        int u = pal[i*4+2], v = pal[i*4+3];
+        // Entry layout is V,U,Y,opacity - NOT the AYUV this used to assume.
+        // The fourth byte takes only the values 0..3 across all 256 entries,
+        // which is what identifies it as a 2-bit opacity field rather than
+        // a chroma channel; reading it as V put the opacity in V
+        // and a chroma byte in A, so every entry whose real chroma happened to
+        // be 0 was reported "(transparent)" and black at 0xff was reported
+        // transparent while being fully opaque. Lane order was then settled on
+        // the body rather than inferred: 0x52 renders blue, which only this
+        // reading predicts.
+        int v = pal[i*4], u = pal[i*4+1];
+        int y = pal[i*4+2], a = pal[i*4+3];
         int su = (u > 127) ? u - 256 : u;
         int sv = (v > 127) ? v - 256 : v;
         int r = y + (359 * sv) / 256;
@@ -1810,8 +1828,8 @@ static void gui_menu_dump_palette(__attribute__ ((unused))int arg)
         if (b < 0) b = 0;
         if (b > 255) b = 255;
 
-        sprintf(line, "  %02x   %02x %02x %02x %02x   %02x%02x%02x%s\n",
-                i, a, y, u, v, r, g, b, a ? "" : "   (transparent)");
+        sprintf(line, "  %02x   %02x %02x %02x %02x   %02x%02x%02x   opacity %d%s\n",
+                i, v, u, y, a, r, g, b, a, a ? "" : "   (invisible)");
         write(fd, line, strlen(line));
     }
 
@@ -2216,6 +2234,13 @@ static void bend_ui_push()
     bend_seg_cur()->bayer      = (unsigned char)bend_ui_bayer;
     bend_seg_cur()->row_period = (unsigned char)bend_ui_period;
     bend_seg_cur()->depth      = (unsigned char)bend_ui_depth;
+}
+
+// The same thing, reachable from outside this file - bend_shot_apply() in
+// core/bend_shot.c needs it, and the shadows themselves are private here.
+void bend_ui_resync(void)
+{
+    bend_ui_pull();
 }
 
 // bend -> shadows. Called after anything that rewrites the whole struct.
@@ -2670,108 +2695,35 @@ static void gui_bendx_reset(__attribute__ ((unused))int arg)
 // by holding the mode button in playback, where the gesture that opens the
 // patchbay in record mode instead asks about the pictures you are looking at.
 //
-// It has to go through the file browser rather than acting on whatever
-// playback is displaying, because this camera cannot say what that is.
-// CAM_HAS_PLAYBACK_IMAGE_NO is a DIGIC 4 and later thing; the equivalent on
-// this body would mean reversing the ImgPlayDrv task, and the ROM's own path
-// builder takes the folder and file numbers as arguments rather than reading
-// them from anywhere findable. A wrong address there loads someone else's
-// bend at best. The browser opens on A/DCIM with the newest folder in front,
-// so it is one press more than the ideal and it is always right.
+// The playback route acts on the picture on screen where the port can name it.
+// CAM_HAS_PLAYBACK_IMAGE_NO is a DIGIC 4 and later thing, so on these bodies
+// the handle had to be reversed one firmware at a time - tools/newport.py's
+// find_playback_image() does it, and playback_current_image_id() reads it. A
+// wrong address there loads someone else's bend at best, which is why the
+// detector refuses to guess and a body without one keeps the browser.
+//
+// The browser is the fallback and is never wrong: it opens on A/DCIM with the
+// newest folder in front, so it is one press more than the ideal.
 
-// Long enough for the longest of the messages below with a full path-less file
-// name in it - the layout line is the new worst case, and the "no bend
-// recorded" line was already over the sixty-four this used to be.
-static char bend_shot_msg[128];
 
-static void bend_shot_selected(const char *fn)
+// What the browser should do once a bend has been loaded. Set by whoever opens
+// it, because only the caller knows which errand this is, and every attempt to
+// work it out afterwards from camera state has been wrong: mode_play reads 0 on
+// these bodies even in playback, and the wider (!mode_rec || mode_play) test
+// disagreed too. 1 = close and hand the screen back (the gallery prompt),
+// 0 = return to the album so another picture can be picked (the CHDK menu).
+int bend_pic_exit_on_load;
+
+void bend_pic_open(int exit_on_load)
 {
-    bend_t        b;
-    bendx_chain_t c;
-    bend_segs_t   sg;
-    int bend_on = 0, bendx_on = 0;
-    const char *name;
-    // Named rather than counted, because "4 segments" and "Quarters" are the
-    // same fact and only one of them tells you where to look. Declared up here
-    // with the rest because the block it is used in starts with a statement on
-    // a build without the second engine.
-    const char *lay;
-
-    if (!fn) return;
-
-    // Report the name rather than the path - the path is most of a line on
-    // this screen and the part that identifies the frame is the end of it.
-    for (name = fn + strlen(fn); name > fn && name[-1] != '/'; name--) ;
-
-    if (!bend_tag_read(fn, &b, &bend_on, &c, &bendx_on, &sg))
-    {
-        sprintf(bend_shot_msg,
-                "No bend recorded for %s - it was not taken with one, or the "
-                "record has been stripped out of it", name);
-        gui_mbox_init(LANG_INFORMATION, (int)bend_shot_msg,
-                      MBOX_BTN_OK|MBOX_TEXT_CENTER, NULL);
-        return;
-    }
-
-    conf.bitbend        = b;
-    conf.bitbend_enable = bend_on;
-    // The layout comes back with the matrices, because on a segmented frame
-    // neither half is the record on its own - the same four bends under a
-    // different layout are a different picture. A version 1 sidecar carries
-    // the layout switched off, which is what the camera that wrote it had.
-    conf.bend_segs      = sg;
-#ifdef CAM_BEND_EXPERIMENTAL
-    conf.bendx        = c;
-    conf.bendx_enable = bendx_on;
-#else
-    // No second engine in this build, so the profiles the frame was taken with
-    // cannot be restored. Said out loud below rather than silently dropped.
-    (void)c; (void)bendx_on;
-#endif
-
-    // Through the same gates a preset goes through, and in the same order -
-    // simplify only after sanitize, because it reads nbits.
-    bend_seg_prep(CAM_SENSOR_BITS_PER_PIXEL);
-#ifdef CAM_BEND_EXPERIMENTAL
-    bendx_chain_sanitize(&conf.bendx);
-#endif
-    bend_ui_pull();
-
-    // The matrix no longer came from a preset on the card, so nothing in the
-    // saved list should still be claiming to be what is loaded.
-    bend_store_detach();
-
-    {
-#ifdef CAM_BEND_EXPERIMENTAL
-        int n = bendx_chain_count(&conf.bendx);
-#else
-        int n = 0;
-        if (bendx_on)
-        {
-            sprintf(bend_shot_msg,
-                    "Loaded the bend from %s. It also used experimental "
-                    "profiles, which this build does not have", name);
-            gui_mbox_init(LANG_INFORMATION, (int)bend_shot_msg,
-                          MBOX_BTN_OK|MBOX_TEXT_CENTER, NULL);
-            return;
-        }
-#endif
-        lay = (conf.bend_segs.layout != BSEG_OFF)
-            ? bend_seg_name(conf.bend_segs.layout) : 0;
-
-        if (bend_on && lay)    sprintf(bend_shot_msg, "Loaded the bend from %s - %s, %d segments", name, lay, bend_seg_n());
-        else if (bend_on && n) sprintf(bend_shot_msg, "Loaded the bend and %d profile%s from %s", n, (n == 1) ? "" : "s", name);
-        else if (bend_on)      sprintf(bend_shot_msg, "Loaded the bend from %s", name);
-        else if (n)            sprintf(bend_shot_msg, "Loaded %d profile%s from %s", n, (n == 1) ? "" : "s", name);
-        else                   sprintf(bend_shot_msg, "%s was taken with nothing applied", name);
-    }
-    gui_mbox_init(LANG_INFORMATION, (int)bend_shot_msg,
-                  MBOX_BTN_OK|MBOX_TEXT_CENTER, NULL);
+    bend_pic_exit_on_load = exit_on_load;
+    module_run("bendpic.flt");
 }
 
+// The CHDK menu item. Loading here comes back to the album.
 static void gui_bend_shot_browse(__attribute__ ((unused))int arg)
 {
-    module_run("bendpic.flt");
+    bend_pic_open(0);
 }
 
 // Held the mode button in playback. Asks first, because the browser is a
@@ -2779,14 +2731,39 @@ static void gui_bend_shot_browse(__attribute__ ((unused))int arg)
 // the one that opens <ALT> - is a worse surprise than one extra press.
 static void gui_bend_shot_prompt_cb(unsigned int btn)
 {
-    if (btn == MBOX_BTN_YES) gui_bend_shot_browse(0);
+    if (btn != MBOX_BTN_YES) return;
+
+    // Acting on the picture actually on screen is the whole point of the
+    // gesture, so ask for that route: the bend becomes the live one, the box
+    // closes, and playback carries on as if nothing had happened.
+    //
+    // The work happens in the module rather than here. Resolving Canon's
+    // playback handle to a filename means walking A/DCIM, and that walk plus
+    // the message it feeds cost about a kilobyte of the resident core image -
+    // which the a480 does not have to spare, it being an ARAM build with a few
+    // hundred bytes left. The module is a .flt read off the card and this route
+    // already loads it, so moving the work there costs nothing and gave the
+    // a480 the feature at all. All that stayed behind is the handle read, which
+    // needs camera.h.
+    //
+    // 2 rather than 1: load the picture on screen directly and close. If the
+    // port cannot name it - no reversed handle, or playback has not settled -
+    // the module falls back to the picker on its own, which is what every body
+    // did before any of this was reversed.
+    bend_pic_open(2);
 }
 
 void gui_bend_shot_prompt(void)
 {
+    // MBOX_FUNC_RESTORE, because this box is raised over Canon's playback
+    // screen. gui_mbox_kbd_process() only calls gui_set_need_restore() when the
+    // caller asked for it, and mboxGuiHandler is NORESTORE_ON_SWITCH so the mode
+    // switch does not set it either - so without this the box is never erased.
+    // Nothing repaints that area in playback, and it sat there after Yes. It
+    // was hidden for a while by the picture browser opening on top of it.
     gui_mbox_init((int)"Reload bend from picture",
                   (int)"Load the bend and profiles a picture was taken with?",
-                  MBOX_BTN_YES_NO|MBOX_DEF_BTN2|MBOX_TEXT_CENTER,
+                  MBOX_BTN_YES_NO|MBOX_DEF_BTN2|MBOX_TEXT_CENTER|MBOX_FUNC_RESTORE,
                   gui_bend_shot_prompt_cb);
 }
 
@@ -2824,6 +2801,7 @@ static CMenuItem bendx_submenu_items[] = {
 static CMenu bendx_submenu = {0x39,(int)"Experimental", bendx_submenu_items };
 
 #endif // CAM_BEND_EXPERIMENTAL
+
 
 // Where the recipe goes. "In JPEG" writes a comment segment into the picture
 // (include/bend_tag.h); "Sidecar" writes the file beside it that this used to
@@ -3821,8 +3799,52 @@ static int posd_canon_owns(void)
         posd_canon_until = get_tick_count() + POSD_CANON_MS;
     return posd_canon_until && (get_tick_count() < posd_canon_until);
 }
+#elif defined(CAM_RECUI_UP_IS_CANON)
+
+// The handover, narrowed to one key.
+//
+// CAM_RECUI's premise is that CHDK owns the record screen because it owns the
+// keys. CAM_RECUI_UP_IS_CANON punches one hole in that: UP is left to Canon
+// because on that body it drives a real control - Tracking AF, say, where
+// Canon puts a target frame on screen, you aim it, press SET, and the frame
+// follows the subject.
+//
+// None of that can be reproduced by a CHDK readout. A flash or focus selector
+// is a property with three values and a label; a tracking frame is Canon
+// rendering a moving box from data CHDK does not have. So for the one key we
+// do not take, the screen genuinely has to go back - and it has to go back
+// *with the lock*, because posd_canon_osd_begin() holds Canon's screen lock
+// for as long as CHDK owns the display and Canon cannot paint through it. That
+// is why pressing UP appeared to do nothing at all: the keypress reached the
+// firmware, the firmware drew, and the lock meant nothing came out.
+//
+// Latched rather than timed, unlike the version above. A timeout suits a
+// selector that dismisses itself after a few seconds; tracking has no such
+// moment - once locked the frame follows the subject indefinitely, and a
+// timeout would take the screen back in the middle of it. So UP hands the
+// screen over and UP hands it back, which is the rule that needs no explaining
+// on the camera: the button that gave Canon the screen is the button that
+// takes it. MENU and leaving the record screen also end it, so the way out is
+// never only one key.
+//
+// Driven from recui_kbd() on the click edge rather than sampled here, because
+// this runs on the draw pass and a latch toggled by a level test would flip
+// once per frame for as long as the key was held.
+static int posd_canon_hold;
+
+void posd_canon_hold_set(int on) { posd_canon_hold = on ? 1 : 0; }
+int  posd_canon_active(void)     { return posd_canon_hold; }
+
+static int posd_canon_owns(void) { return posd_canon_hold; }
+
 #else
 static int posd_canon_owns(void) { return 0; }
+#endif
+
+#if !defined(CAM_RECUI) || !defined(CAM_RECUI_UP_IS_CANON)
+// No handover to report on these builds; recui_kbd() still asks.
+int posd_canon_active(void) { return 0; }
+void posd_canon_hold_set(__attribute__ ((unused))int on) { }
 #endif
 
 // Whether Canon's post-shot review still blocks the overlay.
@@ -5350,6 +5372,7 @@ static void gui_handle_splash(int force_redraw)
 static gui_handler startupGuiHandler = { GUI_MODE_STARTUP, 0, 0, 0, 0, GUI_MODE_FLAG_NODRAWRESTORE | GUI_MODE_FLAG_NORESTORE_ON_SWITCH };
 
 static gui_handler *gui_mode = &startupGuiHandler;  // current gui mode. pointer to gui_handler structure
+
 
 static int gui_osd_need_restore = 0;    // Set when screen needs to be erase and redrawn
 static int gui_mode_need_redraw = 0;    // Set if current mode needs to redraw itself

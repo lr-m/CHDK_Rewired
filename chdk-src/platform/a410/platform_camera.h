@@ -265,3 +265,21 @@
     // suppresses the screen the same way it does on the other two.
     #define CAM_CLOCK_VALID_FLAG            0x200c
     #define CAM_DATE_PROMPT_LATCH           0x70e0
+
+    // The picture Canon is showing in playback, so holding the mode button
+    // over one loads that frame's bend directly instead of opening the browser
+    // to ask which frame was meant. core/bend_shot.c does the rest.
+    //
+    // From tools/newport.py's find_playback_image(): the handle lives at
+    // state 0x7dfd8 + 0xc, and the two extractors Canon's own "%03d-%04d" ID
+    // drawer (0xffd84630) calls are at 0xffc24324 and 0xffc24338.
+    //
+    // Detector-derived, not yet on a body. The same detector reproduces
+    // the a430's hardware-tested value exactly, which is why it is
+    // trusted here, but the first boot on this camera is still the proof.
+    #define CAM_PLAYBACK_CURRENT_IMAGE      1
+    #define CAM_PB_IMAGE_HANDLE             0x07dfe4
+    #define CAM_PB_IMAGE_DIR_MASK           0x0fffffff
+    #define CAM_PB_IMAGE_DIR_SHIFT          18
+    #define CAM_PB_IMAGE_FILE_MASK          0x0003fff0
+    #define CAM_PB_IMAGE_FILE_SHIFT         4

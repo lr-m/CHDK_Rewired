@@ -140,10 +140,17 @@
     // Readout colours come from the selected theme. The old per-boot shuffle
     // is deliberately not enabled: it made the same theme look different on
     // every start and bypassed theme_osd_color().
-    // In the compact OSD build the grid colour selector is the authoritative
-    // colour. Requiring the separate "override grid colours" switch made the
-    // colour selector appear broken.
-    #define CAM_GRID_ALWAYS_USER_COLOR      1
+    // CAM_GRID_ALWAYS_USER_COLOR is deliberately NOT defined, and was removed
+    // rather than left in place, because it never did anything. It was added so
+    // the grid colour selector would work without the separate "override grid
+    // colours" switch - but the only test of it is in modules/gui_grid.c, and
+    // modules are not compiled against camera.h, so the macro was invisible
+    // exactly where it was read. This camera got the behaviour the flag was
+    // added to avoid, silently, for as long as the flag existed.
+    //
+    // What it was reaching for is now in the module and applies to every body:
+    // the override recolours the chromatic parts of a grid and leaves the greys
+    // and whites - housings, posts, outlines - alone. See grid_structural().
 
     // The record-screen control selectors, drawn by CHDK. This is what replaced
     // the handover in posd_screen_active() that used to give the bitmap back to
@@ -257,3 +264,41 @@
     #define CAM_DEFAULT_MENU_CURSOR_FG  IDX_COLOR_WHITE    // Override menu cursor colors
 
     #define CAM_QUALITY_OVERRIDE                1   // https://chdk.setepontos.com/index.php?topic=13342
+
+    // The picture Canon is showing in playback, so holding the mode button over
+    // one loads that frame's bend directly instead of opening the browser to ask
+    // which frame was meant. core/bend_shot.c does the rest.
+    //
+    // Same derivation as the a470's: the drawer is handed its state as an
+    // argument, so tools/newport.py follows that argument up the call chain to
+    // the literal each caller loads. This body is the one that made the walk
+    // insufficient on its own - it reaches two globals, 0x00029d34 and
+    // 0x000166a0, and a popularity ranking would have had to guess between
+    // them. The tie is broken structurally instead: a controller state is
+    // dereferenced at the field its ID drawer reads, and 0x000166a0 never is -
+    // it is only ever passed to other functions whole.
+    //
+    // Confirmed against cameras/a480/ghidra: FUN_ffd2836c(param_1,...) <-
+    // FUN_ffd29ef8(param_1) <- callers passing DAT_ffd1c6b4 / DAT_ffd1da60,
+    // both of which read 0x00029d34. The same decompilation shows the field
+    // being compared - *(state + 0xc) != *(state + 0x48), the "has the
+    // displayed picture changed" test - and assigned, *(state + 0xc) = param_1.
+    //
+    // Confirmed on the camera. It was derived by the detector and corroborated
+    // in the decompilation first, and the hardware then agreed - which is what
+    // promotes _reads_field()'s tie-break from a plausible rule to a tested one.
+    //
+    // This body is why the A/DCIM walk and the message live in
+    // modules/bend_picture.c rather than in the core image. It runs CHDK out of
+    // AgentRAM - ARAM_HEAP_START/ARAM_HEAP_SIZE in sub/100b's makefile.inc are
+    // 0x2ce000 and 0x32000, both read out of the ROM itself (stubs_entry.S
+    // records them at 0xffcf0d10 and 0xffcf0cd0), so the 204800 byte ceiling is
+    // the hardware's and not a tunable. With the whole feature in core it came
+    // to 1072 bytes against 304 spare. Split, all that stays resident is
+    // playback_current_image_id(), which is a word read and two shifts.
+    #define CAM_PLAYBACK_CURRENT_IMAGE      1
+    #define CAM_PB_IMAGE_HANDLE             0x00029d40
+    #define CAM_PB_IMAGE_DIR_MASK           0x0fffffff
+    #define CAM_PB_IMAGE_DIR_SHIFT          18
+    #define CAM_PB_IMAGE_FILE_MASK          0x0003ffff
+    #define CAM_PB_IMAGE_FILE_SHIFT         4

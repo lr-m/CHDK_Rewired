@@ -532,7 +532,12 @@ static ConfInfo conf_info[] = {
     CONF_INFO(215, conf.flash_enable_exp_comp,                  CONF_DEF_VALUE, i:0),
     CONF_INFO(216, conf.hotshoe_override,                       CONF_DEF_VALUE, i:0),
 
-    CONF_INFO(220, conf.alt_mode_button,                        CONF_DEF_VALUE, i:KEY_PRINT),
+    // CAM_DEFAULT_ALT_BUTTON, not a hardcoded KEY_PRINT: camera.h defaults
+    // that to KEY_PRINT, so every existing port is unchanged, but a body that
+    // overrides it - one whose <ALT> does not sit on PRINT - now gets its own
+    // button as the factory value of conf entry 220 as well as in
+    // reset_alt_button().
+    CONF_INFO(220, conf.alt_mode_button,                        CONF_DEF_VALUE, i:CAM_DEFAULT_ALT_BUTTON),
     CONF_INFO(221, conf.alt_prevent_shutdown,                   CONF_DEF_VALUE, i:ALT_PREVENT_SHUTDOWN_ALT),
     CONF_INFO(222, conf.use_zoom_mf,                            CONF_DEF_VALUE, i:0),
     CONF_INFO(223, conf.zoom_assist_button_disable,             CONF_DEF_VALUE, i:0),

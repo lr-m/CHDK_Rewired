@@ -79,6 +79,27 @@ void exit_alt()
 //-------------------------------------------------------------------
 // Core keyboard handler
 
+//-------------------------------------------------------------------
+// "Ignore this key until it is physically released."
+//
+// Armed by a GUI mode that is tearing itself down in response to a keypress, so
+// that whatever it hands the screen back to does not act on the same press. See
+// the call site in kbd_process() for the failure it prevents; gui_mbox.c solves
+// the identical problem for message boxes with its own copy of this.
+static long kbd_swallow_key;
+
+void kbd_swallow_until_release(long key)
+{
+    kbd_swallow_key = key;
+}
+
+int kbd_swallow_blocking(void)
+{
+    if (kbd_swallow_key && !kbd_is_key_pressed(kbd_swallow_key))
+        kbd_swallow_key = 0;
+    return kbd_swallow_key != 0;
+}
+
 long kbd_process()
 {
     static int key_pressed;
@@ -287,6 +308,38 @@ long kbd_process()
 	{
 		kbd_blocked = handle_usb_remote();
 	}
+
+    // A message box that has just closed can still have the key that closed it
+    // physically down - gui_mbox_kbd_process() is no longer called by then,
+    // because gui_set_mode() has already switched away from the box. Without
+    // this the release edge reaches the firmware and Canon acts on it.
+    extern int gui_mbox_kbd_blocking(void);
+    if (gui_mbox_kbd_blocking())
+    {
+        kbd_key_release_all();
+        return 1;
+    }
+
+    // The same hazard, one layer up, for a full-screen GUI mode that closes
+    // itself from its own key handler.
+    //
+    // The menu reads MENUITEM_PROC with kbd_get_autoclicked_key(), so a held
+    // SET repeats. A module launched from such an item takes the GUI mode, and
+    // while it holds it the menu is not called at all - but the moment the
+    // module hands the mode back, the menu is called again with that same SET
+    // still down, the autoclick fires, and the item runs a second time. The
+    // module reopens, and what looks like an undismissable leftover of its
+    // screen is the module genuinely running again.
+    //
+    // bend_picture.c's browser is the case this was found on: loading a bend
+    // put its album straight back on screen, still answering the arrow keys.
+    // Nothing about it is specific to that module, so the swallow lives here
+    // rather than there - any takeover that closes on a keypress can arm it.
+    if (kbd_swallow_blocking())
+    {
+        kbd_key_release_all();
+        return 1;
+    }
 
     if (gui_kbd_process())
         return 1;

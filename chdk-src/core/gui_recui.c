@@ -224,15 +224,21 @@ static const char *const    n_mycol[] = { "OFF", "VIVID", "NEUTRAL", "B/W", "SEP
 // the row still works and the detail column stays blank.
 //===========================================================================
 
-#ifndef CAM_RECUI_DRIVE_VALS
-#error CAM_RECUI needs CAM_RECUI_DRIVE_VALS / _NAMES in platform_camera.h. \
-DRIVE_MODE's third value is "continuous AF" on some bodies and the self timer \
-on others; pick from this camera's firmware, not from another port.
+// A port may opt out of DRIVE entirely with CAM_RECUI_NO_DRIVE, but it has to
+// say so: the #error is what stops a new port silently shipping a control it
+// never picked values for.
+#if !defined(CAM_RECUI_DRIVE_VALS) && !defined(CAM_RECUI_NO_DRIVE)
+#error CAM_RECUI needs CAM_RECUI_DRIVE_VALS / _NAMES in platform_camera.h, \
+or CAM_RECUI_NO_DRIVE where the DRIVE_MODE propcase is not the setting. \
+The third DRIVE_MODE value is "continuous AF" on some bodies and the self \
+timer on others; pick it from this camera firmware, not from another port.
 #endif
 
+#ifndef CAM_RECUI_NO_DRIVE
 static const unsigned short v_drive[] = CAM_RECUI_DRIVE_VALS;
 static const char *const    n_drive[] = CAM_RECUI_DRIVE_NAMES;
 #define RECUI_DRIVE_N   ((unsigned char)(sizeof(v_drive)/sizeof(v_drive[0])))
+#endif
 
 #ifdef CAM_RECUI_SIZE_VALS
 static const unsigned short v_size[] = CAM_RECUI_SIZE_VALS;
@@ -252,20 +258,37 @@ static const char *const    n_qual[] = CAM_RECUI_QUALITY_NAMES;
 #define RECUI_QUAL_N    ((unsigned char)(sizeof(v_qual)/sizeof(v_qual[0])))
 #endif
 
+// Counts come from the tables themselves. They used to be literal 3s and a 7
+// written beside each row, which is fine for as long as every propset offers
+// the same number of positions and silently wrong the moment one does not -
+// a propset with two focus positions and six white balances would have walked
+// v_focus[] one past its end on the third press.
+#define RECUI_N_OF(a)   ((unsigned char)(sizeof(a)/sizeof((a)[0])))
+
+#ifdef CAM_RECUI_NO_DRIVE
+enum { RECUI_FLASH = 0, RECUI_FOCUS, RECUI_NCTL };
+#else
 enum { RECUI_FLASH = 0, RECUI_FOCUS, RECUI_DRIVE, RECUI_NCTL };
+#endif
 
 static const recui_ctl recui_ctls[RECUI_NCTL] = {
-    { "FLASH", RK_PROP, PROPCASE_FLASH_MODE,      3, v_flash, n_flash },
-    { "FOCUS", RK_PROP, PROPCASE_REAL_FOCUS_MODE, 3, v_focus, n_focus },
+    { "FLASH", RK_PROP, PROPCASE_FLASH_MODE,      RECUI_N_OF(v_flash), v_flash, n_flash },
+    { "FOCUS", RK_PROP, PROPCASE_REAL_FOCUS_MODE, RECUI_N_OF(v_focus), v_focus, n_focus },
+#ifndef CAM_RECUI_NO_DRIVE
     { "DRIVE", RK_PROP, PROPCASE_DRIVE_MODE,      RECUI_DRIVE_N, v_drive, n_drive },
+#endif
 };
 
 static const recui_ctl recui_menu[] = {
     { "EV",       RK_EV,   RECUI_EV_PROP,        RECUI_EV_N,    0,       n_ev    },
     { "ISO",      RK_ISO,  0,                    0,             0,       0       },
-    { "WB",       RK_PROP, PROPCASE_WB_MODE,     7,             v_wb,    n_wb    },
-    { "MY COLOR", RK_PROP, PROPCASE_MY_COLORS,   5,             v_mycol, n_mycol },
+    { "WB",       RK_PROP, PROPCASE_WB_MODE,     RECUI_N_OF(v_wb),    v_wb,    n_wb    },
+#ifndef CAM_RECUI_NO_MYCOLOR
+    { "MY COLOR", RK_PROP, PROPCASE_MY_COLORS,   RECUI_N_OF(v_mycol), v_mycol, n_mycol },
+#endif
+#ifndef CAM_RECUI_NO_DRIVE
     { "DRIVE",    RK_PROP, PROPCASE_DRIVE_MODE,  RECUI_DRIVE_N, v_drive, n_drive },
+#endif
 #ifdef CAM_RECUI_SIZE_VALS
     { "SIZE",     RK_PROP, PROPCASE_RESOLUTION,  RECUI_SIZE_N,  v_size,  n_size  },
 #endif
@@ -288,7 +311,7 @@ static int recui_ctl_for_key(long key)
 {
     if (key == KEY_RIGHT) return RECUI_FLASH;
     if (key == KEY_LEFT)  return RECUI_FOCUS;
-#ifndef CAM_RECUI_UPDOWN_IS_ZOOM
+#if !defined(CAM_RECUI_UPDOWN_IS_ZOOM) && !defined(CAM_RECUI_NO_DRIVE)
     if (key == KEY_DOWN)  return RECUI_DRIVE;
 #endif
     return -1;
@@ -383,12 +406,46 @@ static int recui_get(const recui_ctl *c)
     return i;
 }
 
+// One property write, by whichever route this body needs.
+//
+// SetPropertyCase is the right call on every port this menu was written for:
+// there the property store is what the shoot sequence reads, so writing it is
+// the whole operation. CAM_RECUI_NATIVE_SET is for a body where it is not -
+// where the propcase is a mirror Canon keeps up to date rather than the
+// setting itself, so writing it changes what reads back and nothing else. The
+// port supplies Canon's own setter instead.
+//
+// Kept in one place because the failure it fixes is invisible: every row still
+// appears to work, and only the photographs disagree.
+#ifdef CAM_RECUI_NATIVE_SET
+extern int recui_native_set(int prop, int val, int is_signed);
+static int recui_last_err;
+#endif
+
+static void recui_write(int prop, int val, int is_signed)
+{
+#ifdef CAM_RECUI_NATIVE_SET
+    recui_last_err = recui_native_set(prop, val, is_signed);
+#else
+    (void)is_signed;
+    shooting_set_prop(prop, val);
+#endif
+}
+
 static void recui_set(const recui_ctl *c, int idx)
 {
     switch (c->kind)
     {
     case RK_EV:
-        shooting_set_prop(c->prop, (idx - RECUI_EV_MID) * RECUI_EV_STEP);
+        recui_write(c->prop, (idx - RECUI_EV_MID) * RECUI_EV_STEP, 1);
+#ifdef RECUI_EV_PROP2
+        // Bodies whose live exposure reads one EV propcase and whose mode
+        // changes restore it from another need both written, or the setting is
+        // either inert now or gone the next time the camera leaves record
+        // mode. A port that needs this defines RECUI_EV_PROP2 alongside
+        // RECUI_EV_PROP.
+        recui_write(RECUI_EV_PROP2, (idx - RECUI_EV_MID) * RECUI_EV_STEP, 1);
+#endif
         break;
 
     case RK_ISO:
@@ -396,13 +453,25 @@ static void recui_set(const recui_ctl *c, int idx)
         break;
 
     default:
-        shooting_set_prop(c->prop, c->vals[idx]);
+        recui_write(c->prop, c->vals[idx], 0);
         // Focus only. shooting_get_real_focus_mode() reports macro and infinity
         // out of REAL_FOCUS_MODE, but only while FOCUS_MODE says AF - if the MF
         // flag is set it wins and the selection would not read back. Clearing
         // it costs nothing on a body with no native MF.
         if (c->prop == PROPCASE_REAL_FOCUS_MODE)
-            shooting_set_prop(PROPCASE_FOCUS_MODE, 0);
+            recui_write(PROPCASE_FOCUS_MODE, 0, 0);
+
+#ifdef CAM_RECUI_APPLY_IMAGE
+        // Size and quality need the port's apply call after the write - on
+        // some bodies the propcase is the *input* to that call rather than the
+        // setting, so writing it alone does nothing visible until the next
+        // mode change latches it. See CAM_RECUI_APPLY_IMAGE in camera.h.
+        if (c->prop == PROPCASE_RESOLUTION || c->prop == PROPCASE_QUALITY)
+        {
+            extern void recui_apply_image_settings(void);
+            recui_apply_image_settings();
+        }
+#endif
         break;
     }
 }
@@ -469,7 +538,7 @@ static int recui_can_change(void)
         && !kbd_is_key_pressed(KEY_SHOOT_FULL);
 }
 
-static int recui_on_record_screen(void)
+static int recui_canon_screen_ok(void)
 {
     extern int  canon_menu_active;
     extern char canon_shoot_menu_active;
@@ -496,6 +565,17 @@ static int recui_on_record_screen(void)
         && !gui_bend_active()
         && (canon_menu_active == (int)&canon_menu_active - 4)
         && !canon_shoot_menu_active;
+}
+
+// The same screens, without the handover term below, so the handover can ask
+// "are we still on the record screen" without asking about itself.
+static int recui_on_record_screen(void)
+{
+    return recui_canon_screen_ok()
+#ifdef CAM_RECUI_UP_IS_CANON
+        && !posd_canon_active()
+#endif
+        ;
 }
 
 // Called from kbd_process(). Returns 1 when it has taken the keys, which makes
@@ -574,8 +654,17 @@ static inline __attribute__((always_inline)) int recui_control_key_down(void)
         kbd_is_key_pressed(KEY_RIGHT))
         return 1;
 #ifndef CAM_RECUI_UPDOWN_IS_ZOOM
-    if (kbd_is_key_pressed(KEY_DOWN) || kbd_is_key_pressed(KEY_UP))
+    // Only where DOWN still opens something of ours. With CAM_RECUI_NO_DRIVE
+    // there is no DRIVE selector to open, so blocking it would take the
+    // camera's own drive/timer key away and give nothing back.
+#ifndef CAM_RECUI_NO_DRIVE
+    if (kbd_is_key_pressed(KEY_DOWN))
         return 1;
+#endif
+#ifndef CAM_RECUI_UP_IS_CANON
+    if (kbd_is_key_pressed(KEY_UP))
+        return 1;
+#endif
 #endif
     return 0;
 }
@@ -584,6 +673,30 @@ int recui_kbd(void)
 {
     long key;
     int  ctl;
+
+#ifdef CAM_RECUI_UP_IS_CANON
+    // While Canon has the screen, Canon has the keyboard - all of it.
+    //
+    // Ahead of the record-screen test on purpose. That test is false during
+    // the handover (posd_canon_active() is one of its terms), so anything
+    // written below it could never see the second press of the key that ends
+    // the handover, and the only way back would be to leave record mode.
+    //
+    // SET has to go to Canon here too: it is the "lock onto this subject" key
+    // of the tracking flow, and it is also what opens CHDK's FUNC menu. During
+    // the handover it can only mean the first.
+    if (posd_canon_active())
+    {
+        long k = kbd_get_clicked_key();
+
+        if (!recui_canon_screen_ok() || k == KEY_UP || k == KEY_MENU)
+        {
+            posd_canon_hold_set(0);
+            gui_set_need_restore();
+        }
+        return 0;
+    }
+#endif
 
     if (!recui_on_record_screen())
     {
@@ -622,6 +735,25 @@ int recui_kbd(void)
         recui_open_menu(key);
         return 1;
     }
+
+#ifdef CAM_RECUI_UP_IS_CANON
+    //-- handing the screen to Canon ----------------------------------------
+    // UP is Canon's on this body and what it opens cannot be drawn by CHDK -
+    // see the note on posd_canon_owns() in core/gui.c. Take CHDK's own UI down
+    // first so its pixels are not left under Canon's, drop the screen lock by
+    // latching the handover, and return 0 so this very press reaches the
+    // firmware that is about to draw.
+    if (key == KEY_UP)
+    {
+        recui_sel_ctl   = -1;
+        recui_menu_open = 0;
+        recui_dirty     = 1;
+        recui_menu_dirty = 1;
+        posd_canon_hold_set(1);
+        gui_set_need_restore();
+        return 0;
+    }
+#endif
 
 #ifdef CAM_BEND_ENTER_UP
     //-- bend mode ----------------------------------------------------------
@@ -664,6 +796,16 @@ int recui_kbd(void)
     // Canon repaints only the frame it believes is still there, which is an
     // empty white box that stays on screen. It is a free key for the taking.
     //
+    // Except where it is not free. CAM_RECUI_UP_IS_CANON is for a body whose
+    // UP arrow drives a real Canon control - subject tracking, say - rather
+    // than the stateful selector the paragraph above describes. Taking
+    // it there is not claiming an unused key, it is deleting a feature of the
+    // camera, and the empty-white-box failure does not apply because what UP
+    // opens on such a body is not that kind of popup. The FUNC menu still gets
+    // UP: recui_menu_kbd() returns above this and blocks the whole keyboard
+    // for as long as the menu is open, so this only concerns the plain record
+    // screen.
+    //
     // Except where it is the zoom. On a body with no separate zoom control the
     // up and down arrows drive the lens, and blocking them here is not taking
     // a free key - it is taking the zoom off the camera on the one screen it
@@ -693,7 +835,12 @@ int recui_kbd(void)
 #define RECUI_M_DET     10
 #define RECUI_M_CHARS   (RECUI_M_LBL + RECUI_M_VAL + RECUI_M_DET)
 #define RECUI_M_W       (FONT_WIDTH * RECUI_M_CHARS + RECUI_PAD * 2)
-#define RECUI_M_H       (FONT_HEIGHT * RECUI_MENU_N + RECUI_PAD * 2)
+#ifdef CAM_RECUI_DEBUG
+#define RECUI_M_ROWS    (RECUI_MENU_N + 1)      // + the diagnostic line
+#else
+#define RECUI_M_ROWS    RECUI_MENU_N
+#endif
+#define RECUI_M_H       (FONT_HEIGHT * RECUI_M_ROWS + RECUI_PAD * 2)
 
 static int recui_x(void)   { return (camera_screen.width - RECUI_W) / 2; }
 static int recui_y(void)   { return FONT_HEIGHT * 3; }
@@ -750,6 +897,54 @@ static void recui_draw_menu(void)
                     buf, MAKE_COLOR(rb, sel ? theme_color(TC_HILITE_FG)
                                             : theme_color(TC_DIM)));
     }
+
+#ifdef CAM_RECUI_DEBUG
+    // What the property store actually holds for the highlighted row, read
+    // back at this repaint, plus whether writes are being permitted at all.
+    //
+    // This exists to split one question that cannot be answered by looking at
+    // the camera: when a row appears to do nothing, is the propcase write not
+    // landing, or is it landing and the firmware ignoring it? Those have
+    // completely different fixes and guessing between them costs a build and a
+    // card each time.
+    //
+    //   p<id>=<value>   the raw propcase, re-read here and not cached
+    //   w<0|1>          recui_can_change() - 0 means every press is discarded
+    //                   before it reaches the property store
+    //
+    // Press RIGHT and watch the number. Changing = the write lands and the
+    // firmware is overriding it elsewhere. Not changing with w1 = the write is
+    // being rejected or the id is wrong. Not changing with w0 = the interlock
+    // is stuck and nothing is being written at all.
+    {
+        const recui_ctl *dc = &recui_menu[recui_menu_row];
+        char dbg[RECUI_M_CHARS + 1];
+
+        // ISO has no propcase of its own - it goes through the port's
+        // iso_table[] - so it reports its mode index instead of reading
+        // propcase 0, which is a different thing entirely.
+        if (dc->kind == RK_ISO)
+            sprintf(dbg, "iso=%d w%d", shooting_get_iso_mode(),
+                    recui_can_change() ? 1 : 0);
+        else
+            sprintf(dbg, "p%d=%d w%d"
+#ifdef CAM_RECUI_NATIVE_SET
+                         " e%x"
+#endif
+                    , (int)dc->prop,
+                    (int)shooting_get_prop(dc->prop), recui_can_change() ? 1 : 0
+#ifdef CAM_RECUI_NATIVE_SET
+                    // Canon's status from the last write: 0 good, 17 means the
+                    // rec-parameter module was not initialised, anything else
+                    // is the dispatcher refusing the value.
+                    , recui_last_err
+#endif
+                    );
+        recui_pad(buf, dbg, RECUI_M_CHARS);
+        draw_string(x + RECUI_PAD, y + RECUI_PAD + RECUI_MENU_N * FONT_HEIGHT,
+                    buf, MAKE_COLOR(bg, theme_color(TC_WARN)));
+    }
+#endif
 }
 
 static void recui_erase(int x, int y, int w, int h)

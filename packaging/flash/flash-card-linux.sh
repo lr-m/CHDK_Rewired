@@ -4,8 +4,22 @@
 # This is a release script: it lives beside @CARDZIP@ and, given no second
 # argument, flashes exactly that zip. It ERASES the card.
 #
-# These cameras' boot ROM only reads FAT16, so the card gets ONE FAT16 partition
+# These cameras' boot ROM only reads FAT16, so the card gets a FAT16 partition
 # with the string "BOOTDISK" written at offset 0x40 of its boot sector.
+#
+# Two layouts, picked from the card size:
+#
+#   single  one FAT16 partition holding everything. Used whenever the card fits
+#           FAT16 with clusters of 32KiB or less - roughly 2GB and under.
+#
+#   split   a 16MiB FAT16 boot partition holding only DISKBOOT.BIN, then the
+#           rest of the card as FAT32 holding the whole CHDK tree. Only for
+#           bodies whose port mounts a FAT32 partition in preference to the
+#           first one (CAM_MULTIPART plus CHDK's FAT32 autodetect in boot.c):
+#           the boot ROM loads DISKBOOT.BIN from the FAT16 partition, then the
+#           firmware mounts the FAT32 one as A/, so that is where CHDK looks for
+#           its modules and where photos go. Put the CHDK tree on the FAT16 side
+#           instead and the camera boots but reports missing modules.
 #
 # Usage:  sudo ./flash-card-linux.sh /dev/sdX [source-dir-or-zip]
 #
@@ -16,6 +30,12 @@ set -euo pipefail
 
 MODEL="@MODEL@"
 HERE="$(dirname "$(readlink -f "$0")")"
+
+# Whether this body can use the split layout: tested, untested, or no.
+LARGE_CARD="@LARGE_CARD@"
+
+# 32GiB. Above this is SDXC, which every body here predates.
+MAX_SPLIT_BYTES=34359738368
 
 # --allow-64k-clusters: let the FAT16 volume use 64KiB clusters, which is the
 # only way a card between roughly 2GB and 4GB fits in one FAT16 partition.
@@ -83,48 +103,17 @@ if [[ "$(cat "/sys/block/$BASE/removable")" != "1" ]]; then
     exit 1
 fi
 
-BYTES=$(blockdev --getsize64 "$DEV")
-GB=$(( BYTES / 1000000000 ))
-if (( BYTES > 4294967296 )); then
-    # The ceiling here is this script's own single FAT16 partition, not the
-    # camera: say that rather than assert anything about SDHC support, which
-    # varies across bodies.
-    echo "error: $DEV is ${GB}GB. This script writes one FAT16 partition, and" >&2
-    echo "       FAT16 tops out at 4GB. Use a 2GB card or smaller." >&2
-    exit 1
-fi
-
 ROOTDEV=$(findmnt -no SOURCE / | sed 's/[0-9]*$//')
 [[ "$DEV" == "$ROOTDEV" ]] && { echo "error: $DEV is the root disk. Refusing." >&2; exit 1; }
 
-echo "About to ERASE $DEV (${GB}GB, model: $(cat "/sys/block/$BASE/device/model" 2>/dev/null | xargs))"
-lsblk -o NAME,SIZE,FSTYPE,LABEL,MOUNTPOINT "$DEV"
-echo
-read -rp "Type ERASE to continue: " CONFIRM
-[[ "$CONFIRM" == "ERASE" ]] || { echo "aborted"; exit 1; }
+BYTES=$(blockdev --getsize64 "$DEV")
+GB=$(( BYTES / 1000000000 ))
 
-# ---- unmount anything on the card ---------------------------------------
-for part in $(lsblk -lno NAME "$DEV" | tail -n +2); do
-    umount "/dev/$part" 2>/dev/null || true
-done
-
-# ---- partition: single primary FAT16, marked active ----------------------
-echo "==> writing partition table"
-wipefs -a "$DEV" >/dev/null
-sfdisk "$DEV" >/dev/null <<'EOF'
-label: dos
-start=2048, type=06, bootable
-EOF
-partprobe "$DEV"; sleep 2
-
-PART="${DEV}1"
-[[ -b "${DEV}p1" ]] && PART="${DEV}p1"
-
-# ---- format FAT16 --------------------------------------------------------
-# Pick the smallest cluster size that keeps the volume under the 65524-cluster
-# FAT16 cap, capped at 32KiB (-s 64). 64KiB clusters are a FAT16 extension that
-# older boot ROMs reject - a PowerShot A470 will not power on at all from a card
-# formatted that way, while an A480 reads it fine.
+# ---- choose the layout ---------------------------------------------------
+# Pick the smallest cluster size that keeps a single FAT16 volume under the
+# 65524-cluster cap, capped at 32KiB (-s 64). 64KiB clusters are a FAT16
+# extension that older boot ROMs reject - a PowerShot A470 will not power on at
+# all from a card formatted that way, while an A480 reads it fine.
 PART_SECTORS=$(( (BYTES - 1048576) / 512 ))
 TRIES="4 8 16 32 64"
 [[ "$ALLOW_64K" -eq 1 ]] && TRIES="$TRIES 128"
@@ -135,21 +124,28 @@ for try in $TRIES; do
         break
     fi
 done
+
+LAYOUT=single
 if [ "$SPC" -eq 0 ]; then
-    echo "error: ${GB}GB needs >32KiB clusters to fit FAT16, which old cameras" >&2
-    echo "       reject. Use a card of 2GB or less, or pass --allow-64k-clusters" >&2
-    echo "       to try 64KiB clusters anyway (see the note at the top)." >&2
-    exit 1
+    if [[ "$LARGE_CARD" == "no" ]]; then
+        if (( BYTES > 4294967296 )); then
+            echo "error: $DEV is ${GB}GB. The @MODEL_UC@ can only boot CHDK from a single" >&2
+            echo "       FAT16 partition, and FAT16 tops out at 4GB. Use a 2GB card or smaller." >&2
+        else
+            echo "error: ${GB}GB needs >32KiB clusters to fit FAT16, which old cameras" >&2
+            echo "       reject. Use a card of 2GB or less, or pass --allow-64k-clusters" >&2
+            echo "       to try 64KiB clusters anyway (see the note at the top)." >&2
+        fi
+        exit 1
+    fi
+    if (( BYTES > MAX_SPLIT_BYTES )); then
+        echo "error: $DEV is ${GB}GB. Cards over 32GB are SDXC, which the @MODEL_UC@" >&2
+        echo "       predates. Use a card of 32GB or less." >&2
+        exit 1
+    fi
+    LAYOUT=split
 fi
-if [ "$SPC" -eq 128 ]; then
-    echo
-    echo "WARNING: using 64KiB clusters. This is a FAT16 extension that some of" >&2
-    echo "         these boot ROMs refuse - if the camera will not power on from" >&2
-    echo "         this card, that is why, and a 2GB card is the fix. The card" >&2
-    echo "         itself is fine; take it out and the camera is stock again." >&2
-    echo
-fi
-echo "==> formatting $PART as FAT16 ($(( SPC * 512 / 1024 ))KiB clusters, $(( PART_SECTORS / SPC )) clusters)"
+
 # Volume label: RWD_<model>.
 #
 # It must NOT be "CHDK", and this is not cosmetic. On FAT the volume label is
@@ -165,8 +161,70 @@ echo "==> formatting $PART as FAT16 ($(( SPC * 512 / 1024 ))KiB clusters, $(( PA
 # 11 characters is the FAT label limit. "RWD_A460" is 8, so there is room.
 LABEL="RWD_$(echo "$MODEL" | tr '[:lower:]' '[:upper:]')"
 LABEL="${LABEL:0:11}"
-echo "==> volume label: $LABEL"
-mkfs.fat -F 16 -s "$SPC" -n "$LABEL" "$PART" >/dev/null
+
+echo "About to ERASE $DEV (${GB}GB, model: $(cat "/sys/block/$BASE/device/model" 2>/dev/null | xargs))"
+lsblk -o NAME,SIZE,FSTYPE,LABEL,MOUNTPOINT "$DEV"
+echo
+if [[ "$LAYOUT" == "split" ]]; then
+    echo "  layout: 16MiB FAT16 boot partition + $(( GB ))GB FAT32 partition ($LABEL)"
+    if [[ "$LARGE_CARD" == "untested" ]]; then
+        echo
+        echo "  NOTE: this two-partition layout has been tested on the A480, not yet on"
+        echo "        the @MODEL_UC@. If the camera does not see the card, or CHDK reports"
+        echo "        missing modules, use a 2GB card instead - and please say so."
+    fi
+else
+    echo "  layout: one FAT16 partition ($LABEL, $(( SPC * 512 / 1024 ))KiB clusters)"
+fi
+echo
+read -rp "Type ERASE to continue: " CONFIRM
+[[ "$CONFIRM" == "ERASE" ]] || { echo "aborted"; exit 1; }
+
+# ---- unmount anything on the card ---------------------------------------
+for part in $(lsblk -lno NAME "$DEV" | tail -n +2); do
+    umount "/dev/$part" 2>/dev/null || true
+done
+
+# ---- partition -----------------------------------------------------------
+# Partition 1 is always the FAT16 boot partition, primary and marked active.
+echo "==> writing partition table"
+wipefs -a "$DEV" >/dev/null
+if [[ "$LAYOUT" == "split" ]]; then
+    sfdisk "$DEV" >/dev/null <<'EOF'
+label: dos
+start=2048, size=16MiB, type=06, bootable
+type=0c
+EOF
+else
+    sfdisk "$DEV" >/dev/null <<'EOF'
+label: dos
+start=2048, type=06, bootable
+EOF
+fi
+partprobe "$DEV"; sleep 2
+
+PART="${DEV}1"; DATA="${DEV}2"
+[[ -b "${DEV}p1" ]] && { PART="${DEV}p1"; DATA="${DEV}p2"; }
+
+# ---- format --------------------------------------------------------------
+if [[ "$LAYOUT" == "split" ]]; then
+    # 2KiB clusters: 16MiB / 2KiB = 8192 clusters, enough to be FAT16 not FAT12.
+    echo "==> formatting $PART as FAT16 boot partition, label RWD_BOOT"
+    mkfs.fat -F 16 -s 4 -n RWD_BOOT "$PART" >/dev/null
+    echo "==> formatting $DATA as FAT32, label $LABEL"
+    mkfs.fat -F 32 -n "$LABEL" "$DATA" >/dev/null
+else
+    if [ "$SPC" -eq 128 ]; then
+        echo
+        echo "WARNING: using 64KiB clusters. This is a FAT16 extension that some of" >&2
+        echo "         these boot ROMs refuse - if the camera will not power on from" >&2
+        echo "         this card, that is why, and a 2GB card is the fix. The card" >&2
+        echo "         itself is fine; take it out and the camera is stock again." >&2
+        echo
+    fi
+    echo "==> formatting $PART as FAT16 ($(( SPC * 512 / 1024 ))KiB clusters, $(( PART_SECTORS / SPC )) clusters), label $LABEL"
+    mkfs.fat -F 16 -s "$SPC" -n "$LABEL" "$PART" >/dev/null
+fi
 
 # ---- boot signature: "BOOTDISK" at offset 0x40 ---------------------------
 # Must come AFTER mkfs, which rewrites the boot sector.
@@ -175,8 +233,17 @@ printf 'BOOTDISK' | dd of="$PART" bs=1 seek=64 conv=notrunc status=none
 sync
 
 # ---- copy CHDK ------------------------------------------------------------
+# Split: the boot ROM needs only DISKBOOT.BIN on the FAT16 side; everything,
+# DISKBOOT.BIN included, goes on the FAT32 side the firmware actually mounts.
 MNT=$(mktemp -d)
-mount "$PART" "$MNT"
+if [[ "$LAYOUT" == "split" ]]; then
+    mount "$PART" "$MNT"
+    cp "$SRC/DISKBOOT.BIN" "$MNT"/
+    sync; umount "$MNT"
+    mount "$DATA" "$MNT"
+else
+    mount "$PART" "$MNT"
+fi
 echo "==> copying CHDK"
 cp -r "$SRC"/. "$MNT"/
 sync

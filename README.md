@@ -72,7 +72,11 @@ This section assumes you have never used a terminal. Follow it in order and you 
 
 You will need:
 
-* **An SD card, 2 GB recommended.** 2 GB and under is the safe choice and what these cameras were sold alongside; such cards are cheap and plentiful. Larger cards often work too, so try one if it is what you have. The flashing script does cap out at 4 GB, because it writes a FAT16 card and that is FAT16's ceiling.
+* **An SD card, 2 GB or smaller.** These cameras boot only from FAT16, and 2 GB is the most a single FAT16 partition holds with the cluster sizes their boot ROMs accept. Such cards are cheap and plentiful, and they are what these cameras were sold alongside. The flashing scripts refuse anything bigger, except on two bodies:
+  * **A480: up to 32 GB.** On a card over 2 GB the script makes a small 16 MB FAT16 partition for the camera to boot from, and gives the rest of the card to a FAT32 partition that holds CHDK and your photos. You do nothing different; the script picks the layout from the card size.
+  * **A470: up to 32 GB, untested.** It has the same support in its boot code, but nobody has booted it from a large card yet. If you try one, please report how it went, and fall back to a 2 GB card if the camera does not see it.
+
+  Cards over 32 GB are SDXC, which all of these cameras predate.
 * **A card reader**, or an SD slot in your computer.
 * **Your camera**, and five minutes.
 
@@ -219,6 +223,8 @@ NAME  SIZE FSTYPE LABEL MOUNTPOINT
 sde   1.9G
 └─sde1 1.9G vfat  UNTITLED /media/you/UNTITLED
 
+  layout: one FAT16 partition (RWD_A480, 32KiB clusters)
+
 Type ERASE to continue:
 ```
 
@@ -226,8 +232,7 @@ Type `ERASE` in capitals and press Enter. The rest runs by itself:
 
 ```console
 ==> writing partition table
-==> formatting /dev/sde1 as FAT16 (16KiB clusters, 61055 clusters)
-==> volume label: RWD_A480
+==> formatting /dev/sde1 as FAT16 (32KiB clusters, 61120 clusters), label RWD_A480
 ==> writing BOOTDISK signature at 0x40
 ==> copying CHDK
 
@@ -314,7 +319,7 @@ About to ERASE disk4  (2GB, SD Card Reader)
 
   source:       /var/folders/.../tmp.XXXX
   volume label: RWD_A480
-  cluster size: 16KiB
+  layout:       one FAT16 partition, 32KiB clusters
 
 Type ERASE to continue:
 ```
@@ -324,8 +329,8 @@ Type `ERASE` in capitals and press Enter:
 ```console
 ==> unmounting
 ==> writing MBR partition table
-==> reformatting FAT16 with 16KiB clusters
-==> setting partition type 0x06, active
+==> reformatting FAT16 boot partition with 32KiB clusters
+==> setting partition types
 ==> writing BOOTDISK signature at 0x40
 ==> mounting and copying CHDK
 
@@ -397,14 +402,12 @@ The letter here must be the same one File Explorer shows for the card. If it com
 Then:
 
 ```console
-PS> .\flash-card-windows.ps1 -DiskNumber 2
+PS> powershell -ExecutionPolicy Bypass -File .\flash-card-windows.ps1 -DiskNumber 2
 ```
 
-If PowerShell refuses with a message about execution policy, run this once and try again:
+The `-ExecutionPolicy Bypass` part is needed because Windows refuses to run a script that came out of a downloaded zip, with an error mentioning `PSSecurityException` or execution policy. It applies to this one run only and changes nothing else on your computer.
 
-```console
-PS> Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-```
+Do not click inside the PowerShell window while the script runs. Clicking selects text, and Windows then pauses the script until you press Enter or Esc, so it looks stuck; the window title starts with **Select** while that is happening.
 
 The script prints:
 
@@ -415,7 +418,7 @@ About to ERASE disk 2 : Generic STORAGE DEVICE, 1.9 GB, bus USB
 
   source:       C:\Users\You\AppData\Local\Temp\...
   volume label: RWD_A480
-  cluster size: 16 KiB
+  layout:       one FAT16 partition, 32 KiB clusters
 
 Type ERASE to continue:
 ```
@@ -424,10 +427,13 @@ Type `ERASE` in capitals and press Enter:
 
 ```console
 ==> clearing disk
-==> creating FAT16 partition
-==> formatting FAT16 (16 KiB clusters), label RWD_A480
+==> creating FAT16 boot partition
+==> formatting FAT16 (32 KiB clusters), label RWD_A480
 ==> writing BOOTDISK signature at 0x40
 ==> copying CHDK
+==> writing MBR partition types
+    partition 1: MBR type 0x0E -> 0x06 (verified on disk)
+    Windows now reports partition 1 as MBR type 0x06
 
 Card contents:
 A480.TXT  CHDK  DISKBOOT.BIN  camnotes.txt  changelog.txt  readme.txt  vers.req

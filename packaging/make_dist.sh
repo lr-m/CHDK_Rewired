@@ -8,7 +8,9 @@
 #   CHDK-<MODEL>-<fw>-card.zip   the whole card tree, zipped at its root, so
 #                                unzipping it onto a prepared card is enough
 #   flash-card-linux.sh          write that zip to an SD card, from scratch:
-#   flash-card-macos.sh          partition FAT16, BOOTDISK signature, copy
+#   flash-card-macos.sh          partition, BOOTDISK signature, copy (one
+#                                FAT16 partition, or FAT16 boot + FAT32 on
+#                                big cards for the bodies that allow it)
 #   flash-card-windows.ps1
 #   READ_ME_FIRST.txt            what to do, start to finish
 #   vers.req / ver.req           loose copies, for the firmware-version check
@@ -122,6 +124,42 @@ for model in "${MODELS[@]}"; do
     # route is a bootable card, which is what the flash scripts make.
     HAS_FIR=0; [[ -f "$card/PS.FIR" ]] && HAS_FIR=1
 
+    # Which bodies the flash scripts may give the split layout - a 16MiB FAT16
+    # boot partition plus FAT32 for the rest - on cards too big for one FAT16
+    # partition. Only ports with CAM_MULTIPART whose boot code mounts a FAT32
+    # partition ahead of the first one (DataGhost's FAT32 autodetect in
+    # boot.c) qualify: on anything else the firmware mounts the tiny boot
+    # partition and CHDK finds no modules. Stamped into the scripts as
+    # @LARGE_CARD@.
+    #
+    #   tested    the a480, booted from a 32GB card
+    #   untested  same boot code, not yet tried on the body (a470, both
+    #             firmwares)
+    #   no        everything else. The a640 has CAM_MULTIPART but no FAT32
+    #             autodetect in its boot.c, so it stays on 2GB cards.
+    LARGE_CARD=no
+    CARD_HEAD='USE A 2GB OR SMALLER SD CARD'
+    CARD_NOTE='   Anything bigger is SDHC and this camera cannot read it at all.'
+    case "$model" in
+        a480)
+            LARGE_CARD=tested
+            CARD_HEAD='USE AN SD CARD OF 32GB OR SMALLER'
+            CARD_NOTE='   Up to 2GB, the card gets one FAT16 partition. Anything bigger gets
+   two: a small FAT16 one the camera boots from, and the rest as FAT32
+   for CHDK and your photos. The script does all of that; you do not
+   need to do anything different. Over 32GB is SDXC, which this camera
+   predates.'
+            ;;
+        a470)
+            LARGE_CARD=untested
+            CARD_HEAD='USE A 2GB SD CARD IF YOU HAVE ONE'
+            CARD_NOTE='   Up to 32GB should work too - the script then makes a small FAT16
+   boot partition plus FAT32 for the rest - but so far that has only
+   been tried on the A480. If you use a bigger card, please report how
+   it went. Over 32GB is SDXC, which this camera predates.'
+            ;;
+    esac
+
     BUILT=$(find "$card" -maxdepth 1 -iname '*.txt' -exec grep -hoE '^date:.*' {} + 2>/dev/null | head -1 | sed 's/^date://; s/^ *//')
     [[ -n "$BUILT" ]] || BUILT=$(date -r "$card/DISKBOOT.BIN" '+%a, %d %b %Y %H:%M:%S %z')
     MD5=$(md5sum "$card/DISKBOOT.BIN" | cut -d' ' -f1)
@@ -192,6 +230,7 @@ EOF
             -e "s/@MODEL_UC@/$MODEL_UC/g" \
             -e "s/@FW@/$fw/g" \
             -e "s/@CARDZIP@/$CARDZIP/g" \
+            -e "s/@LARGE_CARD@/$LARGE_CARD/g" \
             "$FLASHDIR/$s" > "$PKG/$s"
     done
     chmod +x "$PKG"/flash-card-linux.sh "$PKG"/flash-card-macos.sh
@@ -214,8 +253,8 @@ touches the camera's firmware - take the card out and it's stock again.
 If it ever freezes, pull the battery.
 
 
-1. USE A 2GB OR SMALLER SD CARD
-   Anything bigger is SDHC and this camera cannot read it at all.
+1. $CARD_HEAD
+$CARD_NOTE
 
 2. CHECK THE FIRMWARE VERSION
    Copy vers.req and ver.req (both in this folder) onto the card.
@@ -250,8 +289,11 @@ If it ever freezes, pull the battery.
 
        Linux:    sudo ./flash-card-linux.sh /dev/sdX
        Mac:      sudo ./flash-card-macos.sh diskN
-       Windows:  .\\flash-card-windows.ps1 -DiskNumber N
-                 from an Administrator PowerShell prompt
+       Windows:  powershell -ExecutionPolicy Bypass -File .\\flash-card-windows.ps1 -DiskNumber N
+                 from an Administrator PowerShell prompt. The
+                 -ExecutionPolicy Bypass part is needed because Windows
+                 blocks downloaded scripts by default; it lasts for this
+                 run only.
 
    Each one prints the disk it is about to erase and makes you type
    ERASE before it touches anything. READ THAT LINE. It is your last

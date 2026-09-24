@@ -46,8 +46,11 @@ If it ever freezes, pull the battery.
 
        Linux:    sudo ./flash-card-linux.sh /dev/sdX
        Mac:      sudo ./flash-card-macos.sh diskN
-       Windows:  .\flash-card-windows.ps1 -DiskNumber N
-                 from an Administrator PowerShell prompt
+       Windows:  powershell -ExecutionPolicy Bypass -File .\flash-card-windows.ps1 -DiskNumber N
+                 from an Administrator PowerShell prompt. The
+                 -ExecutionPolicy Bypass part is needed because Windows
+                 blocks downloaded scripts by default; it lasts for this
+                 run only.
 
    Each one prints the disk it is about to erase and makes you type
    ERASE before it touches anything. READ THAT LINE. It is your last

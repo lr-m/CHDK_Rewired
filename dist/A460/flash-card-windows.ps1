@@ -6,15 +6,32 @@
     This is a release script: it lives beside CHDK-A460-100d-card.zip and, with no -Source
     given, flashes exactly that zip. It ERASES the card.
 
-    Makes ONE FAT16 partition with the string "BOOTDISK" at offset 0x40 of its
+    Makes a FAT16 partition with the string "BOOTDISK" at offset 0x40 of its
     boot sector, which is what these pre-2011 PowerShots look for.
+
+    Two layouts, picked from the card size:
+
+      single  one FAT16 partition holding everything. Used whenever the card
+              fits FAT16 with clusters of 32KiB or less - roughly 2GB and under.
+
+      split   a 16MiB FAT16 boot partition holding only DISKBOOT.BIN, then the
+              rest of the card as FAT32 holding the whole CHDK tree. Only for
+              bodies whose port mounts a FAT32 partition in preference to the
+              first one (CAM_MULTIPART plus CHDK's FAT32 autodetect): the boot
+              ROM loads DISKBOOT.BIN from the FAT16 side, then the firmware
+              mounts the FAT32 side as A/, so CHDK and its modules live there.
+              Needs Windows 10 1703 or later, which is what first allowed more
+              than one partition on removable media.
 
     Run from an ADMINISTRATOR PowerShell prompt. Find the disk number with
     Get-Disk (or `diskpart` -> `list disk`) and be certain which one is the
     card: this erases it completely.
 
+    Windows refuses to run downloaded scripts by default (PSSecurityException),
+    so start it with -ExecutionPolicy Bypass, which applies to this run only.
+
 .EXAMPLE
-    .\flash-card-windows.ps1 -DiskNumber 2
+    powershell -ExecutionPolicy Bypass -File .\flash-card-windows.ps1 -DiskNumber 2
 #>
 
 #Requires -RunAsAdministrator
@@ -28,6 +45,13 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $model   = 'a460'
+
+# Whether this body can use the split layout: tested, untested, or no.
+$largeCard = 'no'
+
+# 32GiB. Above this is SDXC, which every body here predates - and Format-Volume
+# will not make FAT32 that large anyway.
+$maxSplitBytes = 34359738368
 $here    = Split-Path -Parent $MyInvocation.MyCommand.Path
 $cardZip = Join-Path $here 'CHDK-A460-100d-card.zip'
 
@@ -67,18 +91,27 @@ if ($disk.BusType -notin @('USB', 'SD', 'MMC')) {
 $bytes = $disk.Size
 $gb    = [math]::Round($bytes / 1GB, 1)
 
-# ---- cluster size ---------------------------------------------------------
+# ---- cluster size and layout ----------------------------------------------
 # FAT16 caps at 65524 clusters. Pick the smallest cluster that fits under that,
-# and refuse anything needing more than 32KiB: 64KiB clusters are a FAT16
-# extension these old boot ROMs reject, and the camera then will not power on
-# from the card at all.
+# and never more than 32KiB: 64KiB clusters are a FAT16 extension these old boot
+# ROMs reject, and the camera then will not power on from the card at all. A
+# card too big for that gets the split layout if this body supports it, and is
+# refused otherwise.
 $partSectors = [math]::Floor(($bytes - 1MB) / 512)
 $spc = 0
 foreach ($try in 4, 8, 16, 32, 64) {
     if (($partSectors / $try) -lt 65524) { $spc = $try; break }
 }
-if ($spc -eq 0 -or $spc -gt 64) {
-    throw "A $gb GB card needs clusters larger than 32KiB to fit FAT16, which these cameras reject. Use a 2GB card or smaller."
+$layout = 'single'
+if ($spc -eq 0) {
+    if ($largeCard -eq 'no') {
+        throw "A $gb GB card needs clusters larger than 32KiB to fit FAT16, which these cameras reject. Use a 2GB card or smaller."
+    }
+    if ($bytes -gt $maxSplitBytes) {
+        throw "A $gb GB card is SDXC, which the A460 predates. Use a card of 32GB or less."
+    }
+    $layout = 'split'
+    $spc = 4   # boot partition: 16MiB / 2KiB = 8192 clusters, FAT16 not FAT12
 }
 $allocUnit = $spc * 512
 
@@ -97,7 +130,16 @@ Write-Host "About to ERASE disk $DiskNumber : $($disk.FriendlyName), $gb GB, bus
 Get-Disk -Number $DiskNumber | Format-Table Number, FriendlyName, Size, PartitionStyle -AutoSize
 Write-Host "  source:       $Source"
 Write-Host "  volume label: $label"
-Write-Host "  cluster size: $($allocUnit / 1024) KiB"
+if ($layout -eq 'split') {
+    Write-Host "  layout:       16MiB FAT16 boot partition + FAT32 for the rest"
+    if ($largeCard -eq 'untested') {
+        Write-Host ""
+        Write-Warning "This two-partition layout has been tested on the A480, not yet on the A460."
+        Write-Warning "If the camera does not see the card, or CHDK reports missing modules, use a 2GB card instead - and please say so."
+    }
+} else {
+    Write-Host "  layout:       one FAT16 partition, $($allocUnit / 1024) KiB clusters"
+}
 Write-Host ""
 $confirm = Read-Host "Type ERASE to continue"
 if ($confirm -cne 'ERASE') { Write-Host "aborted"; exit 1 }
@@ -108,27 +150,39 @@ Clear-Disk -Number $DiskNumber -RemoveData -RemoveOEM -Confirm:$false -ErrorActi
 Initialize-Disk -Number $DiskNumber -PartitionStyle MBR -ErrorAction SilentlyContinue | Out-Null
 Set-Disk -Number $DiskNumber -PartitionStyle MBR -ErrorAction SilentlyContinue
 
-Write-Host "==> creating FAT16 partition"
-$part = New-Partition -DiskNumber $DiskNumber -UseMaximumSize -IsActive -AssignDriveLetter
-$partNumber = $part.PartitionNumber
-
 # The drive letter is assigned asynchronously, so the object New-Partition
 # returned may not carry it yet. Re-read until it does.
-$drive = $null
-foreach ($attempt in 1..15) {
-    Start-Sleep -Seconds 1
-    $part = Get-Partition -DiskNumber $DiskNumber -PartitionNumber $partNumber
-    if ($part.DriveLetter -and $part.DriveLetter -ne [char]0) { $drive = $part.DriveLetter; break }
+function Wait-DriveLetter([int]$partNumber) {
+    foreach ($attempt in 1..15) {
+        Start-Sleep -Seconds 1
+        $p = Get-Partition -DiskNumber $DiskNumber -PartitionNumber $partNumber
+        if ($p.DriveLetter -and $p.DriveLetter -ne [char]0) { return $p.DriveLetter }
+    }
+    throw "Windows did not assign a drive letter to partition $partNumber."
 }
-if (-not $drive) { throw "Windows did not assign a drive letter to the new partition." }
 
-# MBR partition type 0x06 = FAT16. New-Partition guesses from the size; set it
-# explicitly so the result does not depend on the Windows version.
-try { Set-Partition -DiskNumber $DiskNumber -PartitionNumber $partNumber -MbrType FAT16 } catch {}
+Write-Host "==> creating FAT16 boot partition"
+if ($layout -eq 'split') {
+    $part = New-Partition -DiskNumber $DiskNumber -Size 16MB -IsActive -AssignDriveLetter
+    $dataPart = New-Partition -DiskNumber $DiskNumber -UseMaximumSize -AssignDriveLetter
+} else {
+    $part = New-Partition -DiskNumber $DiskNumber -UseMaximumSize -IsActive -AssignDriveLetter
+}
+$partNumber = $part.PartitionNumber
+$drive = Wait-DriveLetter $partNumber
 
-Write-Host "==> formatting FAT16 ($($allocUnit / 1024) KiB clusters), label $label"
-Format-Volume -DriveLetter $drive -FileSystem FAT -NewFileSystemLabel $label `
+$bootLabel = if ($layout -eq 'split') { 'RWD_BOOT' } else { $label }
+Write-Host "==> formatting FAT16 ($($allocUnit / 1024) KiB clusters), label $bootLabel"
+Format-Volume -DriveLetter $drive -FileSystem FAT -NewFileSystemLabel $bootLabel `
               -AllocationUnitSize $allocUnit -Force -Confirm:$false | Out-Null
+
+$dataDrive = $null
+if ($layout -eq 'split') {
+    $dataDrive = Wait-DriveLetter $dataPart.PartitionNumber
+    Write-Host "==> formatting FAT32 data partition, label $label"
+    Format-Volume -DriveLetter $dataDrive -FileSystem FAT32 -NewFileSystemLabel $label `
+                  -Force -Confirm:$false | Out-Null
+}
 Start-Sleep -Seconds 2
 
 # ---- boot signature: "BOOTDISK" at offset 0x40 of the partition -----------
@@ -162,6 +216,44 @@ public static class ChdkRawVolume
     const uint FILE_SHARE_READ = 1, FILE_SHARE_WRITE = 2;
     const uint OPEN_EXISTING = 3;
     const uint FSCTL_LOCK_VOLUME = 0x00090018;
+
+    // Sets the type byte of the MBR entry starting at startLba, on the raw disk,
+    // and reads it back. Sector 0 belongs to no volume, so Windows allows this
+    // with the volumes still mounted. Returns the type that was there before.
+    public static byte SetMbrType(int diskNumber, int sectorSize, long startLba, byte type)
+    {
+        string path = @"\\.\PhysicalDrive" + diskNumber;
+        SafeFileHandle h = CreateFileW(path, GENERIC_READ | GENERIC_WRITE,
+            FILE_SHARE_READ | FILE_SHARE_WRITE, IntPtr.Zero, OPEN_EXISTING, 0, IntPtr.Zero);
+        if (h.IsInvalid)
+            throw new IOException("cannot open " + path + " (error " + Marshal.GetLastWin32Error() + ")");
+
+        using (FileStream fs = new FileStream(h, FileAccess.ReadWrite, sectorSize))
+        {
+            byte[] mbr = new byte[sectorSize];
+            fs.Seek(0, SeekOrigin.Begin);
+            if (fs.Read(mbr, 0, sectorSize) != sectorSize) throw new IOException("short read of MBR");
+            if (mbr[510] != 0x55 || mbr[511] != 0xAA) throw new IOException("sector 0 is not an MBR");
+
+            int entry = -1;
+            for (int i = 0; i < 4; i++)
+                if (BitConverter.ToUInt32(mbr, 0x1BE + 16 * i + 8) == startLba) entry = 0x1BE + 16 * i;
+            if (entry < 0) throw new IOException("no MBR entry starts at LBA " + startLba);
+
+            byte before = mbr[entry + 4];
+            mbr[entry + 4] = type;
+            fs.Seek(0, SeekOrigin.Begin);
+            fs.Write(mbr, 0, sectorSize);
+            fs.Flush();
+
+            byte[] check = new byte[sectorSize];
+            fs.Seek(0, SeekOrigin.Begin);
+            fs.Read(check, 0, sectorSize);
+            if (check[entry + 4] != type)
+                throw new IOException(String.Format("MBR type reads back 0x{0:X2} after writing 0x{1:X2}", check[entry + 4], type));
+            return before;
+        }
+    }
 
     public static void WriteBootdisk(char driveLetter)
     {
@@ -220,14 +312,49 @@ foreach ($attempt in 1..10) {
 if (-not $written) { throw "could not write the boot signature" }
 
 # ---- copy CHDK ------------------------------------------------------------
-Write-Host "==> copying CHDK"
+# Split: the boot ROM needs only DISKBOOT.BIN on the FAT16 side; everything,
+# DISKBOOT.BIN included, goes on the FAT32 side the firmware actually mounts.
 Start-Sleep -Seconds 2
-Copy-Item -Path (Join-Path $Source '*') -Destination "${drive}:\" -Recurse -Force
-Write-VolumeCache -DriveLetter $drive -ErrorAction SilentlyContinue
+$target = $drive
+if ($layout -eq 'split') {
+    Write-Host "==> copying DISKBOOT.BIN to the boot partition"
+    Copy-Item -Path (Join-Path $Source 'DISKBOOT.BIN') -Destination "${drive}:\" -Force
+    Write-VolumeCache -DriveLetter $drive -ErrorAction SilentlyContinue
+    $target = $dataDrive
+}
+Write-Host "==> copying CHDK"
+Copy-Item -Path (Join-Path $Source '*') -Destination "${target}:\" -Recurse -Force
+Write-VolumeCache -DriveLetter $target -ErrorAction SilentlyContinue
+
+# ---- MBR partition types --------------------------------------------------
+# The boot partition must be type 0x06 (FAT16). Windows makes it 0x0E (FAT16
+# LBA), and the A410's boot ROM answers a 0x0E card with "Memory card error"
+# even though the filesystem and BOOTDISK signature are perfect. The split
+# layout's data partition must be 0x0C (FAT32 LBA), the type CHDK's FAT32
+# autodetect looks for.
+#
+# Set-Partition -MbrType did not stick on a real card: the card still came out
+# 0x0E. So the byte is written straight into the MBR and read back from the
+# disk, and this is the last write the script makes, so nothing after it can
+# change the type again.
+$sectorSize = [int]$disk.LogicalSectorSize
+if ($sectorSize -le 0) { $sectorSize = 512 }
+function Set-MbrType($p, [byte]$type) {
+    $lba = [long]($p.Offset / $sectorSize)
+    $before = [ChdkRawVolume]::SetMbrType($DiskNumber, $sectorSize, $lba, $type)
+    Write-Host ("    partition {0}: MBR type 0x{1:X2} -> 0x{2:X2} (verified on disk)" -f $p.PartitionNumber, $before, $type)
+}
+Write-Host "==> writing MBR partition types"
+Set-MbrType $part 0x06
+if ($layout -eq 'split') { Set-MbrType $dataPart 0x0C }
+Update-Disk -Number $DiskNumber -ErrorAction SilentlyContinue
+Get-Partition -DiskNumber $DiskNumber | ForEach-Object {
+    Write-Host ("    Windows now reports partition {0} as MBR type 0x{1:X2}" -f $_.PartitionNumber, [int]$_.MbrType)
+}
 
 Write-Host ""
 Write-Host "Card contents:"
-Get-ChildItem "${drive}:\" | Select-Object -ExpandProperty Name
+Get-ChildItem "${target}:\" | Select-Object -ExpandProperty Name
 Write-Host ""
 Write-Host "OK - card is bootable (BOOTDISK signature verified)." -ForegroundColor Green
 Write-Host ""

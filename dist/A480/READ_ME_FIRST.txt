@@ -10,8 +10,12 @@ touches the camera's firmware - take the card out and it's stock again.
 If it ever freezes, pull the battery.
 
 
-1. USE A 2GB OR SMALLER SD CARD
-   Anything bigger is SDHC and this camera cannot read it at all.
+1. USE AN SD CARD OF 32GB OR SMALLER
+   Up to 2GB, the card gets one FAT16 partition. Anything bigger gets
+   two: a small FAT16 one the camera boots from, and the rest as FAT32
+   for CHDK and your photos. The script does all of that; you do not
+   need to do anything different. Over 32GB is SDXC, which this camera
+   predates.
 
 2. CHECK THE FIRMWARE VERSION
    Copy vers.req and ver.req (both in this folder) onto the card.
@@ -46,8 +50,11 @@ If it ever freezes, pull the battery.
 
        Linux:    sudo ./flash-card-linux.sh /dev/sdX
        Mac:      sudo ./flash-card-macos.sh diskN
-       Windows:  .\flash-card-windows.ps1 -DiskNumber N
-                 from an Administrator PowerShell prompt
+       Windows:  powershell -ExecutionPolicy Bypass -File .\flash-card-windows.ps1 -DiskNumber N
+                 from an Administrator PowerShell prompt. The
+                 -ExecutionPolicy Bypass part is needed because Windows
+                 blocks downloaded scripts by default; it lasts for this
+                 run only.
 
    Each one prints the disk it is about to erase and makes you type
    ERASE before it touches anything. READ THAT LINE. It is your last

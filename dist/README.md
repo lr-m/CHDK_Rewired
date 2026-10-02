@@ -16,7 +16,7 @@ card-flashing scripts, a READ_ME_FIRST, loose
 | [A470](A470/) | 102c | Wed, 16 Sep 2026 23:59:52 +0100 | `CHDK-A470-102c-card.zip` |
 | [A470-101B](A470-101B/) | 101b | Wed, 16 Sep 2026 23:59:10 +0100 | `CHDK-A470-101b-card.zip` |
 | [A480](A480/) | 100b | Tue, 15 Sep 2026 17:12:35 +0100 | `CHDK-A480-100b-card.zip` |
-| [A540](A540/) | 100b | Tue, 15 Sep 2026 17:14:08 +0100 | `CHDK-A540-100b-card.zip` |
+| [A540](A540/) | 100b | Fri, 02 Oct 2026 23:39:19 +0100 | `CHDK-A540-100b-card.zip` |
 | [A640](A640/) | 100b | Tue, 15 Sep 2026 17:15:42 +0100 | `CHDK-A640-100b-card.zip` |
 
 **No Game Boy ROMs are included.** `CHDK/GBC/` ships empty with a note in

@@ -45,6 +45,18 @@
       -9472, 1000000,   63186, 1000000,  208602, 1000000
 
     #define cam_CalibrationIlluminant1      1       // Daylight
+
+    // The LCD shows only the left 704 of the bitmap's 720 half-columns, so
+    // 352 of the 360 CHDK columns are visible. The ImgDDev display-type table
+    // at 0xffd21e14 gives 704 displayed / 720 buffer for LCD, NTSC and PAL alike,
+    // and the LCD scale factor at 0xffd22714 is 704/w - where the a410, a430,
+    // a460 and a640 ROMs all have 720. Canon's own UI lays out inside the 704,
+    // so it looks right; CHDK drawing across all 360 ran 8 columns off the right
+    // and put the grid's centre 4 right of the screen's. The buffer stride is
+    // still 360 (0xffd2332c, 0xffd6ba98), hence BITMAP stays at the default.
+    #undef  CAM_SCREEN_WIDTH
+    #define CAM_SCREEN_WIDTH                352
+
     // cropping
     #define CAM_JPEG_WIDTH                  2816
     #define CAM_JPEG_HEIGHT                 2112

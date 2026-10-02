@@ -46,21 +46,17 @@ On top of everything stock CHDK already does:
 
 | Camera | Firmware | Bend matrix | Persistent OSD | Record UI | Custom sounds | Boot screen |
 |---|---|:---:|:---:|:---:|:---:|:---:|
-| PowerShot A410 ⚠️ | 100e | ✅ | ✅ | ✅ | ❌ | ❌ ¹ |
 | PowerShot A430 | 100b | ✅ | ✅ | ✅ | ✅ | ✅ |
 | PowerShot A460 | 100d | ✅ | ✅ | ✅ | ✅ | ✅ |
 | PowerShot A470 | 102c | ✅ | ✅ | ✅ | ✅ | ✅ |
-| PowerShot A470 ⚠️ untested | 101b ³ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| PowerShot A480 | 100b | ✅ | ✅ | ✅ | ✅ | ✅ ² |
+| PowerShot A470 ⚠️ untested | 101b ² | ✅ | ✅ | ✅ | ✅ | ✅ |
+| PowerShot A480 | 100b | ✅ | ✅ | ✅ | ✅ | ✅ ¹ |
 | PowerShot A540 | 100b | ✅ | ✅ | ✅ | ✅ | ❌ |
 | PowerShot A640 | 100b | ✅ | ✅ | ✅ | ❌ | ❌ |
 
-¹ This ROM carries no startup image to replace. ² With a boot animation.
-³ `101a` runs this same build; see below.
+¹ With a boot animation. ² `101a` runs this same build; see below.
 
 **The A470 has two builds, one per firmware.** Check yours before downloading: `1.02C` and `1.01B` each have their own zip, and a build will not load on the other's firmware. `1.02C` is the reference and the one that has been run on a camera. `1.01B` had every reversed address re-derived from its own ROM dump and is feature-identical, but **has not been on a body yet** — if you have that firmware you are the first, and the worst case is a camera that ignores the card. Firmware `1.01A` runs the `1.01B` build; download that one. `1.00E` is not packaged: it has no ROM dump behind it, so it builds stock CHDK only, which you can produce with `./build-all.sh a470` if you want to dump its ROM.
-
-> ⚠️ **The A410 is not stable.** It intermittently shuts down with an E16 error — on the shutter press, on taking a picture, or with a black live view on power-on. It is a shutdown, not damage: pull the card and the camera is stock again. The cause is a sensor FIFO overrun that seven separate attempted fixes failed to cure, and it may well be a tired sensor rather than this software. It ships anyway in case someone with an A410 in a drawer fancies a go — just don't rely on it.
 
 Multiple exposure, segments, presets, shot recipes, bend-from-a-photo, the Game Boy player, themes and grids are available on every camera in the table.
 
@@ -88,12 +84,11 @@ Each build here is compiled against **one exact firmware revision**, and on any 
 
 **Most cameras here only ever shipped one firmware, so there is nothing to check.** If yours is an **A430, A460, A480, A540 or A640**, skip straight to step 2.
 
-Two need checking, because they shipped in more than one version and you cannot tell which you have from the model name:
+One needs checking, because it shipped in more than one version and you cannot tell which you have from the model name:
 
 * **A470** — shipped as `1.00E`, `1.01A`, `1.01B` and `1.02C`. Three of those are supported, and **which one you have decides which zip you download**: `1.02C` takes the A470 zip, `1.01B` and `1.01A` take the A470-101B zip. `1.00E` is not supported.
-* **A410** — shipped as `1.00E` and `1.00F`. Only **`1.00E`** is supported here.
 
-If you have one of those two, check before you go any further.
+If you have an A470, check before you go any further.
 
 1. Copy `vers.req` and `ver.req` onto any SD card. Both are in the download from step 2, so fetch that first; they are empty marker files, and which of the two names a body looks for varies, so copy both.
 2. Put the card in the camera and switch it on in **PLAY** mode (the blue triangle, not the shooting mode).
@@ -104,7 +99,6 @@ The part you want is the number after **Firmware Ver**. `GM1.00B` means firmware
 
 | Camera | Screen shows | Download |
 |---|---|---|
-| A410 ⚠️ unstable | `1.00E` | `CHDK-Rewired-v0.1.1-A410.zip` |
 | A430 | `1.00B` | `CHDK-Rewired-v0.1.1-A430.zip` |
 | A460 | `1.00D` | `CHDK-Rewired-v0.1.1-A460.zip` |
 | A470 | `1.02C` | `CHDK-Rewired-v0.1.1-A470.zip` |

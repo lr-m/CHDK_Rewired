@@ -14,8 +14,6 @@ ixusizoom_sd30,100f,,100g,,,12532,vxworks,,20,0xff810000,0x1900,0x1FFFFFF,,,,,,,
 ixusizoom_sd30,100g,,,,,12532,vxworks,,20,0xff810000,0x1900,0x1FFFFFF,,,,,,,,,,,,,1
 ixusizoom_sd30,100h,,,,,12532,vxworks,,20,0xff810000,0x1900,0x1FFFFFF,,,,,,,,,,,,,1
 a430,100b,,,,,12536,vxworks,,20,0xffc00000,0x1900,0xffffff,,,,,,,,,,,,,1
-a410,100e,,100f,,,12537,vxworks,,20,0xffc00000,0x1900,0xffffff,,,,,,,,,,,,,1
-a410,100f,,,,,12537,vxworks,,20,0xffc00000,0x1900,0xffffff,,,,,,,,,,,,,1
 s80,100g,,,,,12538,vxworks,,20,0xff810000,0x1900,0x1FFFFFF,,,,,,,,,,,,,1
 s80,101b,,,,,12538,vxworks,,20,0xff810000,0x1900,0x1FFFFFF,,,,,,,,,,,,,1
 a620,100f,,,,,12540,vxworks,,20,0xffc00000,0x1900,0x1FFFFFF,,,,,,,,,,,,,1

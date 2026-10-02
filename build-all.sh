@@ -47,7 +47,6 @@ BIN="$SRC/bin"
 # exactly one DISKBOOT.BIN. The others land in cameras/a470/builds/ and are
 # copied onto a card by hand.
 SUPPORTED="
-a410 100e *
 a430 100b *
 a460 100d *
 a470 100e
